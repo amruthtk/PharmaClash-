@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "452798895034",
+    "project_id": "pharmaclash-189e3",
+    "storage_bucket": "pharmaclash-189e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:452798895034:android:a74db805e4c62017de0383",
+        "android_client_info": {
+          "package_name": "com.example.pharmaclash"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "452798895034-vjft3166ci4infpt5saghif6tmq7s152.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.pharmaclash",
+            "certificate_hash": "3c5701df34f83f5490ea42911fdcfea0e0696856"
+          }
+        },
+        {
+          "client_id": "452798895034-e1dvt4icsak9ghun6k5k6tf2lm0l0k0a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBguEKXTVqAfLEzlIjwBzdK9cOkgSGmW1s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "452798895034-e1dvt4icsak9ghun6k5k6tf2lm0l0k0a.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
