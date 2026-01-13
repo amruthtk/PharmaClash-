@@ -59,5 +59,4 @@ class DefaultFirebaseOptions {
     projectId: 'pharmaclash-189e3',
     storageBucket: 'pharmaclash-189e3.firebasestorage.app',
   );
-
 }
