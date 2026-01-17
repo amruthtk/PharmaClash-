@@ -145,8 +145,9 @@ class FirebaseService {
     String? phone,
     DateTime? dateOfBirth,
     String? gender,
+    bool? isAdmin,
   }) async {
-    await usersCollection.doc(uid).set({
+    final data = <String, dynamic>{
       'email': email,
       'fullName': fullName,
       'phone': phone,
@@ -154,7 +155,33 @@ class FirebaseService {
       'gender': gender,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+
+    // Only set isAdmin if explicitly provided (to avoid overwriting on profile update)
+    if (isAdmin != null) {
+      data['isAdmin'] = isAdmin;
+    }
+
+    await usersCollection.doc(uid).set(data, SetOptions(merge: true));
+  }
+
+  /// Check if user is admin
+  Future<bool> checkIsAdmin(String uid) async {
+    try {
+      final doc = await usersCollection.doc(uid).get();
+      final data = doc.data();
+      return data?['isAdmin'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Set user as admin (for manual admin assignment)
+  Future<void> setAdminRole(String uid, bool isAdmin) async {
+    await usersCollection.doc(uid).update({
+      'isAdmin': isAdmin,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Get user profile from Firestore

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/medical_reference_data.dart';
+import '../theme/app_colors.dart';
 import '../services/firebase_service.dart';
 
 class MedicalInfoScreen extends StatefulWidget {
@@ -44,17 +45,6 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
   late AnimationController _floatController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-
-  // Premium pharma color palette
-  static const Color primaryTeal = Color(0xFF0D9488);
-  static const Color deepTeal = Color(0xFF0F766E);
-  static const Color mintGreen = Color(0xFF5EEAD4);
-  static const Color lightMint = Color(0xFFCCFBF1);
-  static const Color darkText = Color(0xFF134E4A);
-  static const Color grayText = Color(0xFF64748B);
-  static const Color inputBg = Color(0xFFF8FFFE);
-  static const Color borderColor = Color(0xFFE2E8F0);
-  static const Color cardBg = Color(0xFFFFFFFF);
 
   @override
   void initState() {
@@ -219,7 +209,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: isError ? Colors.red.shade400 : primaryTeal,
+        backgroundColor: isError ? Colors.red.shade400 : AppColors.primaryTeal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -229,7 +219,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FFFE),
+      backgroundColor: AppColors.inputBg,
       body: Stack(
         children: [
           // Animated background
@@ -271,7 +261,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                           // Chronic Diseases Section
                           _buildSectionCard(
                             icon: Icons.medical_services_outlined,
-                            iconColor: primaryTeal,
+                            iconColor: AppColors.primaryTeal,
                             title: 'Chronic Conditions',
                             subtitle: 'Select any conditions that apply to you',
                             child: _buildChronicDiseasesSection(),
@@ -324,7 +314,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      lightMint.withValues(alpha: 0.4),
+                      AppColors.lightMint.withValues(alpha: 0.4),
                       Colors.transparent,
                     ],
                   ),
@@ -341,7 +331,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      mintGreen.withValues(alpha: 0.12),
+                      AppColors.mintGreen.withValues(alpha: 0.12),
                       Colors.transparent,
                     ],
                   ),
@@ -378,7 +368,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor),
+              border: Border.all(color: AppColors.lightBorderColor),
             ),
             child: IconButton(
               onPressed: () {
@@ -390,7 +380,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
               },
               icon: const Icon(
                 Icons.arrow_back_ios_new,
-                color: darkText,
+                color: AppColors.darkText,
                 size: 18,
               ),
             ),
@@ -399,7 +389,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             child: Center(
               child: ShaderMask(
                 shaderCallback: (bounds) => const LinearGradient(
-                  colors: [deepTeal, primaryTeal],
+                  colors: [AppColors.deepTeal, AppColors.primaryTeal],
                 ).createShader(bounds),
                 child: const Text(
                   'Medical Information',
@@ -424,24 +414,24 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            primaryTeal.withValues(alpha: 0.1),
-            mintGreen.withValues(alpha: 0.05),
+            AppColors.primaryTeal.withValues(alpha: 0.1),
+            AppColors.mintGreen.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryTeal.withValues(alpha: 0.2)),
+        border: Border.all(color: AppColors.primaryTeal.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: primaryTeal.withValues(alpha: 0.15),
+              color: AppColors.primaryTeal.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.health_and_safety_rounded,
-              color: primaryTeal,
+              color: AppColors.primaryTeal,
               size: 24,
             ),
           ),
@@ -454,7 +444,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                   'Step 2 of 2',
                   style: TextStyle(
                     fontSize: 13,
-                    color: grayText,
+                    color: AppColors.grayText,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -463,7 +453,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                   'Complete your health profile',
                   style: TextStyle(
                     fontSize: 15,
-                    color: darkText,
+                    color: AppColors.darkText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -472,8 +462,8 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                   borderRadius: BorderRadius.circular(4),
                   child: const LinearProgressIndicator(
                     value: 1.0,
-                    backgroundColor: borderColor,
-                    valueColor: AlwaysStoppedAnimation<Color>(primaryTeal),
+                    backgroundColor: AppColors.lightBorderColor,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryTeal),
                     minHeight: 6,
                   ),
                 ),
@@ -495,7 +485,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -533,13 +523,13 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: darkText,
+                        color: AppColors.darkText,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(fontSize: 13, color: grayText),
+                      style: const TextStyle(fontSize: 13, color: AppColors.grayText),
                     ),
                   ],
                 ),
@@ -594,14 +584,14 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
               Icon(
                 Icons.info_outline,
                 size: 14,
-                color: grayText.withValues(alpha: 0.7),
+                color: AppColors.grayText.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 6),
               Text(
                 'Select from verified drug allergies only',
                 style: TextStyle(
                   fontSize: 12,
-                  color: grayText.withValues(alpha: 0.7),
+                  color: AppColors.grayText.withValues(alpha: 0.7),
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -626,7 +616,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
         })),
 
         const SizedBox(height: 16),
-        Container(height: 1, color: borderColor),
+        Container(height: 1, color: AppColors.lightBorderColor),
         const SizedBox(height: 16),
 
         // Search for more conditions
@@ -634,7 +624,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
           'Search for more conditions',
           style: TextStyle(
             fontSize: 13,
-            color: grayText,
+            color: AppColors.grayText,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -668,7 +658,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             children: _selectedConditions.map((condition) {
               return _buildChip(
                 label: condition,
-                color: primaryTeal,
+                color: AppColors.primaryTeal,
                 onRemove: () => _removeCondition(condition),
               );
             }).toList(),
@@ -714,11 +704,11 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
         TextField(
           controller: controller,
           focusNode: focusNode,
-          style: const TextStyle(fontSize: 15, color: darkText),
+          style: const TextStyle(fontSize: 15, color: AppColors.darkText),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: grayText.withValues(alpha: 0.6)),
-            prefixIcon: const Icon(Icons.search, color: grayText, size: 20),
+            hintStyle: TextStyle(color: AppColors.grayText.withValues(alpha: 0.6)),
+            prefixIcon: const Icon(Icons.search, color: AppColors.grayText, size: 20),
             suffixIcon: controller.text.isNotEmpty
                 ? IconButton(
                     icon: const Icon(Icons.close, size: 18),
@@ -729,18 +719,18 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                   )
                 : null,
             filled: true,
-            fillColor: inputBg,
+            fillColor: AppColors.inputBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderColor),
+              borderSide: BorderSide(color: AppColors.lightBorderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: borderColor),
+              borderSide: BorderSide(color: AppColors.lightBorderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: primaryTeal, width: 2),
+              borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -757,7 +747,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor),
+              border: Border.all(color: AppColors.lightBorderColor),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
@@ -786,7 +776,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                           Icon(
                             Icons.add_circle_outline,
                             size: 18,
-                            color: primaryTeal,
+                            color: AppColors.primaryTeal,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -794,7 +784,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                               suggestion,
                               style: const TextStyle(
                                 fontSize: 14,
-                                color: darkText,
+                                color: AppColors.darkText,
                               ),
                             ),
                           ),
@@ -857,10 +847,10 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: value ? primaryTeal.withValues(alpha: 0.08) : inputBg,
+            color: value ? AppColors.primaryTeal.withValues(alpha: 0.08) : AppColors.inputBg,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: value ? primaryTeal.withValues(alpha: 0.3) : borderColor,
+              color: value ? AppColors.primaryTeal.withValues(alpha: 0.3) : AppColors.lightBorderColor,
             ),
           ),
           child: Row(
@@ -869,10 +859,10 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: value ? primaryTeal : Colors.transparent,
+                  color: value ? AppColors.primaryTeal : Colors.transparent,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: value ? primaryTeal : borderColor,
+                    color: value ? AppColors.primaryTeal : AppColors.lightBorderColor,
                     width: 2,
                   ),
                 ),
@@ -890,7 +880,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: value ? darkText : grayText,
+                        color: value ? AppColors.darkText : AppColors.grayText,
                       ),
                     ),
                     if (subtitle.isNotEmpty)
@@ -899,8 +889,8 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                         style: TextStyle(
                           fontSize: 12,
                           color: value
-                              ? grayText
-                              : grayText.withValues(alpha: 0.7),
+                              ? AppColors.grayText
+                              : AppColors.grayText.withValues(alpha: 0.7),
                         ),
                       ),
                   ],
@@ -947,26 +937,26 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
-      style: const TextStyle(fontSize: 15, color: darkText),
+      style: const TextStyle(fontSize: 15, color: AppColors.darkText),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: grayText.withValues(alpha: 0.6)),
+        hintStyle: TextStyle(color: AppColors.grayText.withValues(alpha: 0.6)),
         prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: grayText, size: 20)
+            ? Icon(prefixIcon, color: AppColors.grayText, size: 20)
             : null,
         filled: true,
-        fillColor: inputBg,
+        fillColor: AppColors.inputBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: borderColor),
+          borderSide: BorderSide(color: AppColors.lightBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: borderColor),
+          borderSide: BorderSide(color: AppColors.lightBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primaryTeal, width: 2),
+          borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -1088,7 +1078,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                       decoration: BoxDecoration(
                         color: Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: borderColor),
+                        border: Border.all(color: AppColors.lightBorderColor),
                       ),
                       child: const Center(
                         child: Text(
@@ -1096,7 +1086,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: grayText,
+                            color: AppColors.grayText,
                           ),
                         ),
                       ),
@@ -1116,12 +1106,12 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [primaryTeal, deepTeal],
+                          colors: [AppColors.primaryTeal, AppColors.deepTeal],
                         ),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: primaryTeal.withValues(alpha: 0.35),
+                            color: AppColors.primaryTeal.withValues(alpha: 0.35),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -1168,3 +1158,6 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
     );
   }
 }
+
+
+

@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/medical_reference_data.dart';
+import '../theme/app_colors.dart';
 import '../services/firebase_service.dart';
+import '../services/emergency_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,6 +15,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with TickerProviderStateMixin {
   final FirebaseService _firebaseService = FirebaseService();
+  final EmergencyService _emergencyService = EmergencyService();
 
   // User data
   Map<String, dynamic>? _userProfile;
@@ -21,16 +23,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isLoading = true;
 
   late AnimationController _floatController;
-
-  // Premium dark theme colors
-  static const Color primaryTeal = Color(0xFF0D9488);
-  static const Color deepTeal = Color(0xFF0F766E);
-  static const Color mintGreen = Color(0xFF5EEAD4);
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color cardBg = Color(0xFF1E293B);
-  static const Color lightText = Color(0xFFF1F5F9);
-  static const Color mutedText = Color(0xFF94A3B8);
-  static const Color borderColor = Color(0xFF334155);
 
   @override
   void initState() {
@@ -87,7 +79,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: isError ? Colors.red.shade400 : primaryTeal,
+        backgroundColor: isError ? Colors.red.shade400 : AppColors.primaryTeal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -137,19 +129,31 @@ class _ProfileScreenState extends State<ProfileScreen>
     return List<String>.from(conditions);
   }
 
+  String get _caregiverName {
+    return _medicalInfo?['caregiverName'] ?? '';
+  }
+
+  String get _caregiverPhone {
+    return _medicalInfo?['caregiverPhone'] ?? '';
+  }
+
+  bool get _hasCaregiverConfigured {
+    return _caregiverPhone.isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Container(
-        color: darkBg,
+        color: AppColors.softWhite,
         child: const Center(
-          child: CircularProgressIndicator(color: primaryTeal),
+          child: CircularProgressIndicator(color: AppColors.primaryTeal),
         ),
       );
     }
 
     return Container(
-      color: darkBg,
+      color: AppColors.softWhite,
       child: Stack(
         children: [
           // Animated background
@@ -190,6 +194,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                 _buildConditionsCard(),
                 const SizedBox(height: 24),
 
+                // Emergency Caregiver Section
+                _buildSectionTitle(
+                  'Emergency Caregiver',
+                  Icons.contact_emergency_rounded,
+                ),
+                const SizedBox(height: 12),
+                _buildCaregiverCard(),
+                const SizedBox(height: 24),
+
                 // Account Actions
                 _buildSectionTitle('Account', Icons.settings_outlined),
                 const SizedBox(height: 12),
@@ -218,7 +231,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      primaryTeal.withValues(alpha: 0.1),
+                      AppColors.lightMint.withValues(alpha: 0.5),
                       Colors.transparent,
                     ],
                   ),
@@ -235,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      mintGreen.withValues(alpha: 0.08),
+                      AppColors.mintGreen.withValues(alpha: 0.15),
                       Colors.transparent,
                     ],
                   ),
@@ -256,12 +269,12 @@ class _ProfileScreenState extends State<ProfileScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primaryTeal.withValues(alpha: 0.2),
-            deepTeal.withValues(alpha: 0.1),
+            AppColors.primaryTeal.withValues(alpha: 0.1),
+            AppColors.lightMint.withValues(alpha: 0.3),
           ],
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: primaryTeal.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.primaryTeal.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -270,11 +283,13 @@ class _ProfileScreenState extends State<ProfileScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [primaryTeal, deepTeal]),
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryTeal, AppColors.deepTeal],
+              ),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: primaryTeal.withValues(alpha: 0.4),
+                  color: AppColors.primaryTeal.withValues(alpha: 0.4),
                   blurRadius: 15,
                   offset: const Offset(0, 5),
                 ),
@@ -303,13 +318,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: lightText,
+                    color: AppColors.darkText,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _userEmail,
-                  style: TextStyle(fontSize: 14, color: mutedText),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.grayText,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -318,19 +336,23 @@ class _ProfileScreenState extends State<ProfileScreen>
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: primaryTeal.withValues(alpha: 0.2),
+                    color: AppColors.primaryTeal.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.verified, size: 14, color: mintGreen),
-                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.verified,
+                        size: 14,
+                        color: AppColors.primaryTeal,
+                      ),
+                      SizedBox(width: 6),
                       Text(
                         'Verified Account',
                         style: TextStyle(
                           fontSize: 12,
-                          color: mintGreen,
+                          color: AppColors.primaryTeal,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -348,14 +370,14 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildSectionTitle(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, color: mutedText, size: 18),
+        Icon(icon, color: AppColors.grayText, size: 18),
         const SizedBox(width: 8),
         Text(
           title,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: mutedText,
+            color: AppColors.grayText,
             letterSpacing: 0.5,
           ),
         ),
@@ -367,9 +389,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -395,23 +424,29 @@ class _ProfileScreenState extends State<ProfileScreen>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: primaryTeal.withValues(alpha: 0.1),
+              color: AppColors.primaryTeal.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: primaryTeal, size: 18),
+            child: Icon(icon, color: AppColors.primaryTeal, size: 18),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 12, color: mutedText)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.grayText,
+                  ),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 15,
-                    color: lightText,
+                    color: AppColors.darkText,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -424,16 +459,23 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildDivider() {
-    return Container(height: 1, color: borderColor);
+    return Container(height: 1, color: AppColors.lightBorderColor);
   }
 
   Widget _buildAllergiesCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,7 +487,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 _allergies.isEmpty
                     ? 'No allergies recorded'
                     : '${_allergies.length} allergies',
-                style: TextStyle(fontSize: 14, color: mutedText),
+                style: const TextStyle(fontSize: 14, color: AppColors.grayText),
               ),
               _buildEditButton(onTap: () => _showEditAllergiesDialog()),
             ],
@@ -462,7 +504,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.15),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: Colors.red.withValues(alpha: 0.3),
@@ -474,14 +516,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Icon(
                         Icons.warning_amber_rounded,
                         size: 14,
-                        color: Colors.red.shade300,
+                        color: Colors.red.shade600,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         allergy,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.red.shade200,
+                          color: Colors.red.shade700,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -500,9 +542,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -514,7 +563,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 _conditions.isEmpty
                     ? 'No conditions recorded'
                     : '${_conditions.length} conditions',
-                style: TextStyle(fontSize: 14, color: mutedText),
+                style: const TextStyle(fontSize: 14, color: AppColors.grayText),
               ),
               _buildEditButton(onTap: () => _showEditConditionsDialog()),
             ],
@@ -531,26 +580,26 @@ class _ProfileScreenState extends State<ProfileScreen>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: primaryTeal.withValues(alpha: 0.15),
+                    color: AppColors.primaryTeal.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: primaryTeal.withValues(alpha: 0.3),
+                      color: AppColors.primaryTeal.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.medical_services_outlined,
                         size: 14,
-                        color: mintGreen,
+                        color: AppColors.primaryTeal,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         condition,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
-                          color: mintGreen,
+                          color: AppColors.primaryTeal,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -571,21 +620,248 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: primaryTeal.withValues(alpha: 0.15),
+          color: AppColors.primaryTeal.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: primaryTeal.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: AppColors.primaryTeal.withValues(alpha: 0.3),
+          ),
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.edit_outlined, size: 14, color: primaryTeal),
-            const SizedBox(width: 4),
+            Icon(Icons.edit_outlined, size: 14, color: AppColors.primaryTeal),
+            SizedBox(width: 4),
             Text(
               'Edit',
               style: TextStyle(
                 fontSize: 12,
-                color: primaryTeal,
+                color: AppColors.primaryTeal,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCaregiverCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.lightBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: _hasCaregiverConfigured
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Emergency contact configured',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.grayText,
+                      ),
+                    ),
+                    _buildEditButton(
+                      onTap: () {
+                        Navigator.pushNamed(context, '/medical-info');
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Caregiver info card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTeal.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.primaryTeal.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTeal.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.person,
+                          color: AppColors.primaryTeal,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _caregiverName.isNotEmpty
+                                  ? _caregiverName
+                                  : 'Caregiver',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.darkText,
+                              ),
+                            ),
+                            Text(
+                              _caregiverPhone,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.grayText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCaregiverActionButton(
+                        icon: Icons.phone_rounded,
+                        label: 'Call',
+                        color: Colors.green,
+                        onTap: () async {
+                          await _emergencyService.callCaregiver(
+                            customPhone: _caregiverPhone,
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildCaregiverActionButton(
+                        icon: Icons.message_rounded,
+                        label: 'Send SMS',
+                        color: Colors.blue,
+                        onTap: () async {
+                          await _emergencyService.sendSMSAlert(
+                            message:
+                                'Hello, this is a test message from PharmaClash.',
+                            customPhone: _caregiverPhone,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Icon(
+                  Icons.person_add_rounded,
+                  size: 48,
+                  color: AppColors.grayText.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'No emergency contact',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkText,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Add a caregiver to receive emergency alerts',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: AppColors.grayText),
+                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pushNamed(context, '/medical-info');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primaryTeal, AppColors.deepTeal],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryTeal.withValues(alpha: 0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, color: Colors.white, size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'Add Caregiver',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildCaregiverActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color,
               ),
             ),
           ],
@@ -597,9 +873,16 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildAccountActionsCard() {
     return Container(
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -609,7 +892,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             subtitle: 'Reload your profile data',
             onTap: _loadUserData,
           ),
-          Container(height: 1, color: borderColor),
+          Container(height: 1, color: AppColors.lightBorderColor),
           _buildActionTile(
             icon: Icons.logout_rounded,
             title: 'Sign Out',
@@ -638,7 +921,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? Colors.red.shade400 : primaryTeal;
+    final color = isDestructive ? Colors.red.shade500 : AppColors.primaryTeal;
 
     return Material(
       color: Colors.transparent,
@@ -652,7 +935,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 20),
@@ -667,17 +950,25 @@ class _ProfileScreenState extends State<ProfileScreen>
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: isDestructive ? Colors.red.shade300 : lightText,
+                        color: isDestructive
+                            ? Colors.red.shade600
+                            : AppColors.darkText,
                       ),
                     ),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 12, color: mutedText),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.grayText,
+                      ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: mutedText),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.grayText,
+              ),
             ],
           ),
         ),
@@ -703,11 +994,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
           return Container(
             height: MediaQuery.of(context).size.height * 0.75,
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               children: [
@@ -717,7 +1006,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: borderColor,
+                    color: AppColors.lightBorderColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -733,7 +1022,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: lightText,
+                          color: AppColors.darkText,
                         ),
                       ),
                       TextButton(
@@ -744,7 +1033,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: const Text(
                           'Save',
                           style: TextStyle(
-                            color: primaryTeal,
+                            color: AppColors.primaryTeal,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -758,17 +1047,37 @@ class _ProfileScreenState extends State<ProfileScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: TextField(
                     controller: searchController,
-                    style: const TextStyle(color: lightText),
+                    style: const TextStyle(color: AppColors.darkText),
                     onChanged: (_) => setModalState(() {}),
                     decoration: InputDecoration(
                       hintText: 'Search allergies...',
-                      hintStyle: TextStyle(color: mutedText),
-                      prefixIcon: Icon(Icons.search, color: mutedText),
+                      hintStyle: TextStyle(
+                        color: AppColors.grayText.withValues(alpha: 0.7),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AppColors.grayText,
+                      ),
                       filled: true,
-                      fillColor: darkBg,
+                      fillColor: AppColors.inputBg,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(
+                          color: AppColors.lightBorderColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppColors.lightBorderColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.primaryTeal,
+                          width: 2,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -788,22 +1097,23 @@ class _ProfileScreenState extends State<ProfileScreen>
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: selectedAllergies.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(width: 8),
                         itemBuilder: (context, index) {
                           final allergy = selectedAllergies[index];
                           return Chip(
                             label: Text(
                               allergy,
                               style: TextStyle(
-                                color: Colors.red.shade200,
+                                color: Colors.red.shade700,
                                 fontSize: 12,
                               ),
                             ),
-                            backgroundColor: Colors.red.withValues(alpha: 0.2),
+                            backgroundColor: Colors.red.withValues(alpha: 0.1),
                             deleteIcon: Icon(
                               Icons.close,
                               size: 16,
-                              color: Colors.red.shade300,
+                              color: Colors.red.shade600,
                             ),
                             onDeleted: () {
                               setModalState(() {
@@ -848,13 +1158,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? Colors.red.withValues(alpha: 0.15)
-                                  : darkBg,
+                                  ? Colors.red.withValues(alpha: 0.1)
+                                  : AppColors.inputBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected
                                     ? Colors.red.withValues(alpha: 0.3)
-                                    : borderColor,
+                                    : AppColors.lightBorderColor,
                               ),
                             ),
                             child: Row(
@@ -870,7 +1180,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     border: Border.all(
                                       color: isSelected
                                           ? Colors.red
-                                          : borderColor,
+                                          : AppColors.lightBorderColor,
                                       width: 2,
                                     ),
                                   ),
@@ -889,8 +1199,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: isSelected
-                                          ? Colors.red.shade200
-                                          : lightText,
+                                          ? Colors.red.shade700
+                                          : AppColors.darkText,
                                       fontWeight: isSelected
                                           ? FontWeight.w600
                                           : FontWeight.w400,
@@ -929,11 +1239,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
           return Container(
             height: MediaQuery.of(context).size.height * 0.75,
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               children: [
@@ -943,7 +1251,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: borderColor,
+                    color: AppColors.lightBorderColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -959,7 +1267,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: lightText,
+                          color: AppColors.darkText,
                         ),
                       ),
                       TextButton(
@@ -970,7 +1278,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: const Text(
                           'Save',
                           style: TextStyle(
-                            color: primaryTeal,
+                            color: AppColors.primaryTeal,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -984,17 +1292,37 @@ class _ProfileScreenState extends State<ProfileScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: TextField(
                     controller: searchController,
-                    style: const TextStyle(color: lightText),
+                    style: const TextStyle(color: AppColors.darkText),
                     onChanged: (_) => setModalState(() {}),
                     decoration: InputDecoration(
                       hintText: 'Search conditions...',
-                      hintStyle: TextStyle(color: mutedText),
-                      prefixIcon: Icon(Icons.search, color: mutedText),
+                      hintStyle: TextStyle(
+                        color: AppColors.grayText.withValues(alpha: 0.7),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AppColors.grayText,
+                      ),
                       filled: true,
-                      fillColor: darkBg,
+                      fillColor: AppColors.inputBg,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(
+                          color: AppColors.lightBorderColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppColors.lightBorderColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.primaryTeal,
+                          width: 2,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -1014,19 +1342,25 @@ class _ProfileScreenState extends State<ProfileScreen>
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: selectedConditions.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(width: 8),
                         itemBuilder: (context, index) {
                           final condition = selectedConditions[index];
                           return Chip(
                             label: Text(
                               condition,
-                              style: TextStyle(color: mintGreen, fontSize: 12),
+                              style: const TextStyle(
+                                color: AppColors.primaryTeal,
+                                fontSize: 12,
+                              ),
                             ),
-                            backgroundColor: primaryTeal.withValues(alpha: 0.2),
-                            deleteIcon: Icon(
+                            backgroundColor: AppColors.primaryTeal.withValues(
+                              alpha: 0.1,
+                            ),
+                            deleteIcon: const Icon(
                               Icons.close,
                               size: 16,
-                              color: mintGreen,
+                              color: AppColors.primaryTeal,
                             ),
                             onDeleted: () {
                               setModalState(() {
@@ -1071,13 +1405,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? primaryTeal.withValues(alpha: 0.15)
-                                  : darkBg,
+                                  ? AppColors.primaryTeal.withValues(alpha: 0.1)
+                                  : AppColors.inputBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected
-                                    ? primaryTeal.withValues(alpha: 0.3)
-                                    : borderColor,
+                                    ? AppColors.primaryTeal.withValues(
+                                        alpha: 0.3,
+                                      )
+                                    : AppColors.lightBorderColor,
                               ),
                             ),
                             child: Row(
@@ -1087,13 +1423,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   height: 24,
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? primaryTeal
+                                        ? AppColors.primaryTeal
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
                                       color: isSelected
-                                          ? primaryTeal
-                                          : borderColor,
+                                          ? AppColors.primaryTeal
+                                          : AppColors.lightBorderColor,
                                       width: 2,
                                     ),
                                   ),
@@ -1111,7 +1447,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     condition,
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: isSelected ? mintGreen : lightText,
+                                      color: isSelected
+                                          ? AppColors.primaryTeal
+                                          : AppColors.darkText,
                                       fontWeight: isSelected
                                           ? FontWeight.w600
                                           : FontWeight.w400,

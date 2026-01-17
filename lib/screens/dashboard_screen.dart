@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import 'profile_screen.dart';
+import 'scan_screen.dart';
+import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -14,16 +16,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 1;
   final FirebaseService _firebaseService = FirebaseService();
-
-  // Premium pharma color palette
-  static const Color primaryTeal = Color(0xFF0D9488);
-  static const Color deepTeal = Color(0xFF0F766E);
-  static const Color mintGreen = Color(0xFF5EEAD4);
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color cardBg = Color(0xFF1E293B);
-  static const Color lightText = Color(0xFFF1F5F9);
-  static const Color mutedText = Color(0xFF94A3B8);
-  static const Color accentGreen = Color(0xFF10B981);
 
   late AnimationController _pulseController;
   late AnimationController _floatController;
@@ -85,7 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: darkBg,
+      backgroundColor: AppColors.softWhite,
       body: Stack(
         children: [
           // Background gradient with floating elements
@@ -118,15 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildCurrentTab() {
     switch (_currentIndex) {
       case 0: // Scan
-        return Center(
-          child: Text(
-            'Scan Feature Coming Soon',
-            style: TextStyle(
-              color: lightText.withValues(alpha: 0.5),
-              fontSize: 18,
-            ),
-          ),
-        );
+        return const ScanScreen();
       case 1: // Schedule
         return _buildScheduleTab();
       case 2: // History
@@ -134,13 +118,23 @@ class _DashboardScreenState extends State<DashboardScreen>
           child: Text(
             'History Coming Soon',
             style: TextStyle(
-              color: lightText.withValues(alpha: 0.5),
+              color: AppColors.grayText.withValues(alpha: 0.7),
               fontSize: 18,
             ),
           ),
         );
       case 3: // Profile
         return const ProfileScreen();
+      case 4: // Medicine Cabinet
+        return Center(
+          child: Text(
+            'Medicine Cabinet Coming Soon',
+            style: TextStyle(
+              color: AppColors.grayText.withValues(alpha: 0.7),
+              fontSize: 18,
+            ),
+          ),
+        );
       default:
         return _buildScheduleTab();
     }
@@ -156,14 +150,15 @@ class _DashboardScreenState extends State<DashboardScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                darkBg,
+                AppColors.softWhite,
+                Colors.white,
                 Color.lerp(
-                  darkBg,
-                  cardBg,
-                  0.3 + (_floatController.value * 0.1),
+                  AppColors.lightMint,
+                  Colors.white,
+                  0.7 + (_floatController.value * 0.1),
                 )!,
-                darkBg,
               ],
+              stops: const [0.0, 0.5, 1.0],
             ),
           ),
           child: Stack(
@@ -174,7 +169,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 right: 50,
                 child: _buildFloatingPill(
                   30,
-                  primaryTeal.withValues(alpha: 0.1),
+                  AppColors.primaryTeal.withValues(alpha: 0.15),
                 ),
               ),
               Positioned(
@@ -183,7 +178,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 left: 30,
                 child: _buildFloatingPill(
                   25,
-                  mintGreen.withValues(alpha: 0.08),
+                  AppColors.mintGreen.withValues(alpha: 0.12),
                 ),
               ),
               Positioned(
@@ -197,7 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        accentGreen.withValues(alpha: 0.15),
+                        AppColors.accentGreen.withValues(alpha: 0.2),
                         Colors.transparent,
                       ],
                     ),
@@ -229,14 +224,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            cardBg.withValues(alpha: 0.8),
-            cardBg.withValues(alpha: 0.0),
-          ],
-        ),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,14 +247,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                     'Hello, $_userName! 👋',
                     style: const TextStyle(
                       fontSize: 15,
-                      color: mutedText,
+                      color: AppColors.grayText,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 6),
                   ShaderMask(
                     shaderCallback: (bounds) => const LinearGradient(
-                      colors: [primaryTeal, mintGreen],
+                      colors: [AppColors.deepTeal, AppColors.primaryTeal],
                     ).createShader(bounds),
                     child: const Text(
                       'My Medicine Cabinet',
@@ -306,15 +301,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: cardBg,
+          color: AppColors.inputBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1,
-          ),
+          border: Border.all(color: AppColors.lightBorderColor, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -323,7 +315,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(icon, color: lightText, size: 22),
+            Icon(icon, color: AppColors.darkText, size: 22),
             if (hasNotification)
               Positioned(
                 right: 10,
@@ -332,11 +324,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: accentGreen,
+                    color: AppColors.accentGreen,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: accentGreen.withValues(alpha: 0.5),
+                        color: AppColors.accentGreen.withValues(alpha: 0.5),
                         blurRadius: 6,
                         spreadRadius: 1,
                       ),
@@ -365,7 +357,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   'Active',
                   '0',
                   Icons.medication_rounded,
-                  primaryTeal,
+                  AppColors.primaryTeal,
                 ),
               ),
               const SizedBox(width: 16),
@@ -374,7 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   'Today',
                   '0',
                   Icons.schedule_rounded,
-                  accentGreen,
+                  AppColors.accentGreen,
                 ),
               ),
             ],
@@ -398,11 +390,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [cardBg, cardBg.withValues(alpha: 0.8)],
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
         boxShadow: [
@@ -419,7 +407,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -430,15 +418,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w800,
-              color: lightText,
+              color: AppColors.darkText,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
-              color: mutedText,
+              color: AppColors.grayText,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -462,19 +450,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                   width: 140,
                   height: 140,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [cardBg, cardBg.withValues(alpha: 0.8)],
-                    ),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(32),
                     border: Border.all(
-                      color: primaryTeal.withValues(alpha: 0.3),
+                      color: AppColors.primaryTeal.withValues(alpha: 0.3),
                       width: 2,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryTeal.withValues(alpha: 0.2),
+                        color: AppColors.primaryTeal.withValues(alpha: 0.15),
                         blurRadius: 30,
                         spreadRadius: 0,
                       ),
@@ -491,7 +475,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             width: 60,
                             height: 10,
                             decoration: BoxDecoration(
-                              color: lightText.withValues(alpha: 0.8),
+                              color: AppColors.primaryTeal.withValues(
+                                alpha: 0.6,
+                              ),
                               borderRadius: BorderRadius.circular(5),
                             ),
                           ),
@@ -517,7 +503,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           // Text
           ShaderMask(
             shaderCallback: (bounds) => const LinearGradient(
-              colors: [lightText, mutedText],
+              colors: [AppColors.deepTeal, AppColors.primaryTeal],
             ).createShader(bounds),
             child: const Text(
               'Your cabinet is empty!',
@@ -534,7 +520,11 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Text(
               'Scan your first medicine to check for safety clashes and set up your schedule.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: mutedText, height: 1.5),
+              style: TextStyle(
+                fontSize: 15,
+                color: AppColors.grayText,
+                height: 1.5,
+              ),
             ),
           ),
           const SizedBox(height: 48),
@@ -552,7 +542,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   children: [
                     Icon(
                       Icons.arrow_downward_rounded,
-                      color: primaryTeal.withValues(
+                      color: AppColors.primaryTeal.withValues(
                         alpha: 0.3 + (_scanAnimation.value * 0.3),
                       ),
                       size: 28,
@@ -561,7 +551,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     Text(
                       'Tap to scan',
                       style: TextStyle(
-                        color: primaryTeal.withValues(alpha: 0.6),
+                        color: AppColors.primaryTeal.withValues(alpha: 0.6),
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -582,7 +572,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       height: 48,
       decoration: BoxDecoration(
         color: Colors.transparent,
-        border: Border.all(color: lightText.withValues(alpha: 0.6), width: 2.5),
+        border: Border.all(
+          color: AppColors.primaryTeal.withValues(alpha: 0.5),
+          width: 2.5,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
@@ -590,7 +583,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           width: 8,
           height: 8,
           decoration: BoxDecoration(
-            color: lightText.withValues(alpha: 0.6),
+            color: AppColors.primaryTeal.withValues(alpha: 0.5),
             shape: BoxShape.circle,
           ),
         ),
@@ -608,11 +601,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [primaryTeal, deepTeal],
+          colors: [AppColors.primaryTeal, AppColors.deepTeal],
         ),
         boxShadow: [
           BoxShadow(
-            color: primaryTeal.withValues(alpha: 0.5),
+            color: AppColors.primaryTeal.withValues(alpha: 0.4),
             blurRadius: 25,
             offset: const Offset(0, 8),
             spreadRadius: 0,
@@ -639,11 +632,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 25,
             offset: const Offset(0, -5),
           ),
@@ -656,20 +649,20 @@ class _DashboardScreenState extends State<DashboardScreen>
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(
-                icon: Icons.qr_code_scanner_rounded,
-                label: 'Scan',
-                index: 0,
-              ),
-              _buildNavItem(
                 icon: Icons.calendar_today_rounded,
                 label: 'Schedule',
                 index: 1,
               ),
-              const SizedBox(width: 60), // Space for FAB
               _buildNavItem(
                 icon: Icons.history_rounded,
                 label: 'History',
                 index: 2,
+              ),
+              const SizedBox(width: 68), // Space for FAB
+              _buildNavItem(
+                icon: Icons.medication_rounded,
+                label: 'Cabinet',
+                index: 4,
               ),
               _buildNavItem(
                 icon: Icons.person_rounded,
@@ -703,8 +696,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           gradient: isSelected
               ? LinearGradient(
                   colors: [
-                    primaryTeal.withValues(alpha: 0.2),
-                    primaryTeal.withValues(alpha: 0.1),
+                    AppColors.primaryTeal.withValues(alpha: 0.15),
+                    AppColors.primaryTeal.withValues(alpha: 0.05),
                   ],
                 )
               : null,
@@ -713,14 +706,18 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: isSelected ? primaryTeal : mutedText, size: 24),
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primaryTeal : AppColors.grayText,
+              size: 24,
+            ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? primaryTeal : mutedText,
+                color: isSelected ? AppColors.primaryTeal : AppColors.grayText,
               ),
             ),
           ],

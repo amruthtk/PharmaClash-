@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import '../widgets/google_icon.dart';
+import '../theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,16 +27,6 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<Offset> _slideAnimation;
 
   final FirebaseService _firebaseService = FirebaseService();
-
-  // Enhanced pharma color palette
-  static const Color primaryTeal = Color(0xFF0D9488);
-  static const Color deepTeal = Color(0xFF0F766E);
-  static const Color mintGreen = Color(0xFF5EEAD4);
-  static const Color lightMint = Color(0xFFCCFBF1);
-  static const Color darkText = Color(0xFF134E4A);
-  static const Color grayText = Color(0xFF64748B);
-  static const Color inputBg = Color(0xFFF8FFFE);
-  static const Color borderColor = Color(0xFFE2E8F0);
 
   @override
   void initState() {
@@ -135,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen>
             Text(message),
           ],
         ),
-        backgroundColor: primaryTeal,
+        backgroundColor: AppColors.primaryTeal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -164,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ForgotPasswordSheet(primaryTeal: primaryTeal),
+      builder: (context) => _ForgotPasswordSheet(),
     );
   }
 
@@ -240,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: grayText,
+                                color: AppColors.grayText,
                               ),
                               onPressed: () {
                                 setState(
@@ -312,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [lightMint, Colors.transparent],
+                        colors: [AppColors.lightMint, Colors.transparent],
                       ),
                     ),
                   ),
@@ -331,7 +322,7 @@ class _LoginScreenState extends State<LoginScreen>
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          mintGreen.withValues(alpha: 0.25),
+                          AppColors.mintGreen.withValues(alpha: 0.25),
                           Colors.transparent,
                         ],
                       ),
@@ -351,7 +342,7 @@ class _LoginScreenState extends State<LoginScreen>
                       width: 35,
                       height: 14,
                       decoration: BoxDecoration(
-                        color: primaryTeal,
+                        color: AppColors.primaryTeal,
                         borderRadius: BorderRadius.circular(7),
                       ),
                     ),
@@ -370,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen>
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
       ),
       child: IconButton(
         onPressed: () {
@@ -380,7 +371,7 @@ class _LoginScreenState extends State<LoginScreen>
             Navigator.pushReplacementNamed(context, '/splash');
           }
         },
-        icon: const Icon(Icons.arrow_back_ios_new, color: darkText, size: 18),
+        icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText, size: 18),
       ),
     );
   }
@@ -403,12 +394,12 @@ class _LoginScreenState extends State<LoginScreen>
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [primaryTeal, deepTeal],
+                    colors: [AppColors.primaryTeal, AppColors.deepTeal],
                   ),
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
-                      color: primaryTeal.withValues(alpha: 0.3),
+                      color: AppColors.primaryTeal.withValues(alpha: 0.3),
                       blurRadius: 25,
                       offset: const Offset(0, 10),
                     ),
@@ -428,7 +419,7 @@ class _LoginScreenState extends State<LoginScreen>
         // Welcome text
         ShaderMask(
           shaderCallback: (bounds) => const LinearGradient(
-            colors: [deepTeal, primaryTeal],
+            colors: [AppColors.deepTeal, AppColors.primaryTeal],
           ).createShader(bounds),
           child: const Text(
             'Welcome Back',
@@ -445,7 +436,7 @@ class _LoginScreenState extends State<LoginScreen>
           'Sign in to continue your health journey',
           style: TextStyle(
             fontSize: 15,
-            color: grayText,
+            color: AppColors.grayText,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -459,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen>
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: darkText,
+        color: AppColors.darkText,
       ),
     );
   }
@@ -480,33 +471,33 @@ class _LoginScreenState extends State<LoginScreen>
       validator: validator,
       style: const TextStyle(
         fontSize: 16,
-        color: darkText,
+        color: AppColors.darkText,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
-          color: grayText.withValues(alpha: 0.7),
+          color: AppColors.grayText.withValues(alpha: 0.7),
           fontWeight: FontWeight.w400,
         ),
         prefixIcon: Container(
           margin: const EdgeInsets.only(left: 4),
-          child: Icon(prefixIcon, color: grayText, size: 22),
+          child: Icon(prefixIcon, color: AppColors.grayText, size: 22),
         ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: inputBg,
+        fillColor: AppColors.inputBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: borderColor),
+          borderSide: BorderSide(color: AppColors.lightBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: borderColor),
+          borderSide: BorderSide(color: AppColors.lightBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: primaryTeal, width: 2),
+          borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -537,7 +528,7 @@ class _LoginScreenState extends State<LoginScreen>
                 value: _rememberMe,
                 onChanged: (value) =>
                     setState(() => _rememberMe = value ?? false),
-                activeColor: primaryTeal,
+                activeColor: AppColors.primaryTeal,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(5),
                 ),
@@ -546,7 +537,7 @@ class _LoginScreenState extends State<LoginScreen>
             const SizedBox(width: 8),
             const Text(
               'Remember me',
-              style: TextStyle(fontSize: 14, color: grayText),
+              style: TextStyle(fontSize: 14, color: AppColors.grayText),
             ),
           ],
         ),
@@ -556,7 +547,7 @@ class _LoginScreenState extends State<LoginScreen>
             'Forgot Password?',
             style: TextStyle(
               fontSize: 14,
-              color: primaryTeal,
+              color: AppColors.primaryTeal,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -581,12 +572,12 @@ class _LoginScreenState extends State<LoginScreen>
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [primaryTeal, deepTeal],
+              colors: [AppColors.primaryTeal, AppColors.deepTeal],
             ),
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: primaryTeal.withValues(alpha: 0.35),
+                color: AppColors.primaryTeal.withValues(alpha: 0.35),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -682,7 +673,7 @@ class _LoginScreenState extends State<LoginScreen>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor, width: 1.5),
+            border: Border.all(color: AppColors.lightBorderColor, width: 1.5),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -699,7 +690,7 @@ class _LoginScreenState extends State<LoginScreen>
               Text(
                 'Continue with Google',
                 style: TextStyle(
-                  color: darkText,
+                  color: AppColors.darkText,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -717,14 +708,14 @@ class _LoginScreenState extends State<LoginScreen>
       children: [
         const Text(
           "Don't have an account? ",
-          style: TextStyle(color: grayText, fontSize: 14),
+          style: TextStyle(color: AppColors.grayText, fontSize: 14),
         ),
         GestureDetector(
           onTap: () => Navigator.pushReplacementNamed(context, '/register'),
           child: const Text(
             'Sign Up',
             style: TextStyle(
-              color: primaryTeal,
+              color: AppColors.primaryTeal,
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -737,9 +728,7 @@ class _LoginScreenState extends State<LoginScreen>
 
 // Forgot Password Bottom Sheet
 class _ForgotPasswordSheet extends StatefulWidget {
-  final Color primaryTeal;
-
-  const _ForgotPasswordSheet({required this.primaryTeal});
+  const _ForgotPasswordSheet();
 
   @override
   State<_ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
@@ -837,15 +826,15 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        widget.primaryTeal.withValues(alpha: 0.1),
-                        widget.primaryTeal.withValues(alpha: 0.05),
+                        AppColors.primaryTeal.withValues(alpha: 0.1),
+                        AppColors.primaryTeal.withValues(alpha: 0.05),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Icon(
                     Icons.lock_reset_rounded,
-                    color: widget.primaryTeal,
+                    color: AppColors.primaryTeal,
                     size: 36,
                   ),
                 ),
@@ -857,7 +846,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF134E4A),
+                  color: AppColors.darkText,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -866,7 +855,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 'Enter your email and we\'ll send you a link to reset your password.',
                 style: TextStyle(
                   fontSize: 15,
-                  color: Color(0xFF64748B),
+                  color: AppColors.grayText,
                   height: 1.5,
                 ),
                 textAlign: TextAlign.center,
@@ -879,25 +868,25 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'Enter your email',
-                  hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                  hintStyle: const TextStyle(color: AppColors.mutedText),
                   prefixIcon: const Icon(
                     Icons.email_outlined,
-                    color: Color(0xFF64748B),
+                    color: AppColors.grayText,
                     size: 22,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF8FFFE),
+                  fillColor: AppColors.inputBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    borderSide: const BorderSide(color: AppColors.lightBorderColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    borderSide: const BorderSide(color: AppColors.lightBorderColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: widget.primaryTeal, width: 2),
+                    borderSide: BorderSide(color: AppColors.primaryTeal, width: 2),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -917,12 +906,12 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [widget.primaryTeal, const Color(0xFF0F766E)],
+                        colors: [AppColors.primaryTeal, AppColors.deepTeal],
                       ),
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: widget.primaryTeal.withValues(alpha: 0.35),
+                          color: AppColors.primaryTeal.withValues(alpha: 0.35),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -959,15 +948,15 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        const Color(0xFF10B981).withValues(alpha: 0.15),
-                        const Color(0xFF10B981).withValues(alpha: 0.05),
+                        AppColors.accentGreen.withValues(alpha: 0.15),
+                        AppColors.accentGreen.withValues(alpha: 0.05),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: const Icon(
                     Icons.check_circle_rounded,
-                    color: Color(0xFF10B981),
+                    color: AppColors.accentGreen,
                     size: 48,
                   ),
                 ),
@@ -979,7 +968,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF134E4A),
+                  color: AppColors.darkText,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -988,7 +977,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 'We\'ve sent a password reset link to\n${_emailController.text}',
                 style: const TextStyle(
                   fontSize: 15,
-                  color: Color(0xFF64748B),
+                  color: AppColors.grayText,
                   height: 1.5,
                 ),
                 textAlign: TextAlign.center,
@@ -1004,7 +993,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [widget.primaryTeal, const Color(0xFF0F766E)],
+                        colors: [AppColors.primaryTeal, AppColors.deepTeal],
                       ),
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -1029,3 +1018,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
     );
   }
 }
+
+
+
+

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import '../widgets/google_icon.dart';
+import '../theme/app_colors.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,14 +22,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   final FirebaseService _firebaseService = FirebaseService();
   bool _isLoading = false;
-
-  // Pharma color palette - calming medical colors
-  static const Color primaryTeal = Color(0xFF0D9488);
-  static const Color deepTeal = Color(0xFF0F766E);
-  static const Color mintGreen = Color(0xFF5EEAD4);
-  static const Color lightMint = Color(0xFFCCFBF1);
-  static const Color darkText = Color(0xFF134E4A);
-  static const Color softWhite = Color(0xFFF0FDFA);
 
   @override
   void initState() {
@@ -146,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
                         children: [
                           ShaderMask(
                             shaderCallback: (bounds) => const LinearGradient(
-                              colors: [deepTeal, primaryTeal],
+                              colors: [AppColors.deepTeal, AppColors.primaryTeal],
                             ).createShader(bounds),
                             child: const Text(
                               'PharmaClash',
@@ -164,7 +157,7 @@ class _SplashScreenState extends State<SplashScreen>
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 16,
-                              color: Color(0xFF64748B),
+                              color: AppColors.grayText,
                               height: 1.5,
                               fontWeight: FontWeight.w400,
                             ),
@@ -192,7 +185,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     width: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      color: darkText,
+                                      color: AppColors.darkText,
                                     ),
                                   )
                                 : const Row(
@@ -203,7 +196,7 @@ class _SplashScreenState extends State<SplashScreen>
                                       Text(
                                         'Continue with Google',
                                         style: TextStyle(
-                                          color: darkText,
+                                          color: AppColors.darkText,
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -303,10 +296,10 @@ class _SplashScreenState extends State<SplashScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                softWhite,
+                AppColors.softWhite,
                 Colors.white,
                 Color.lerp(
-                  lightMint,
+                  AppColors.lightMint,
                   Colors.white,
                   0.7 + (_floatController.value * 0.1),
                 )!,
@@ -391,7 +384,7 @@ class _SplashScreenState extends State<SplashScreen>
       width: size,
       height: size * 0.4,
       decoration: BoxDecoration(
-        color: primaryTeal,
+        color: AppColors.primaryTeal,
         borderRadius: BorderRadius.circular(size * 0.2),
       ),
     );
@@ -403,7 +396,7 @@ class _SplashScreenState extends State<SplashScreen>
       height: size * 0.4,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(size * 0.2),
-        gradient: const LinearGradient(colors: [primaryTeal, mintGreen]),
+        gradient: const LinearGradient(colors: [AppColors.primaryTeal, AppColors.mintGreen]),
       ),
     );
   }
@@ -419,7 +412,7 @@ class _SplashScreenState extends State<SplashScreen>
             width: size * 0.35,
             height: size,
             decoration: BoxDecoration(
-              color: primaryTeal,
+              color: AppColors.primaryTeal,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -427,7 +420,7 @@ class _SplashScreenState extends State<SplashScreen>
             width: size,
             height: size * 0.35,
             decoration: BoxDecoration(
-              color: primaryTeal,
+              color: AppColors.primaryTeal,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -437,7 +430,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildDNAHelix(double size) {
-    return Icon(Icons.biotech_outlined, size: size, color: primaryTeal);
+    return Icon(Icons.biotech_outlined, size: size, color: AppColors.primaryTeal);
   }
 
   Widget _buildAnimatedLogo() {
@@ -454,18 +447,18 @@ class _SplashScreenState extends State<SplashScreen>
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [primaryTeal, deepTeal],
+                colors: [AppColors.primaryTeal, AppColors.deepTeal],
               ),
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: primaryTeal.withValues(alpha: 0.35),
+                  color: AppColors.primaryTeal.withValues(alpha: 0.35),
                   blurRadius: 30,
                   offset: const Offset(0, 12),
                   spreadRadius: 0,
                 ),
                 BoxShadow(
-                  color: deepTeal.withValues(alpha: 0.2),
+                  color: AppColors.deepTeal.withValues(alpha: 0.2),
                   blurRadius: 60,
                   offset: const Offset(0, 20),
                   spreadRadius: -10,
@@ -548,10 +541,10 @@ class _SplashScreenState extends State<SplashScreen>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: primaryTeal, width: 2),
+            border: Border.all(color: AppColors.primaryTeal, width: 2),
             boxShadow: [
               BoxShadow(
-                color: primaryTeal.withValues(alpha: 0.1),
+                color: AppColors.primaryTeal.withValues(alpha: 0.1),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -561,7 +554,7 @@ class _SplashScreenState extends State<SplashScreen>
             child: Text(
               label,
               style: const TextStyle(
-                color: primaryTeal,
+                color: AppColors.primaryTeal,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
@@ -587,12 +580,12 @@ class _SplashScreenState extends State<SplashScreen>
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [primaryTeal, deepTeal],
+              colors: [AppColors.primaryTeal, AppColors.deepTeal],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: primaryTeal.withValues(alpha: 0.35),
+                color: AppColors.primaryTeal.withValues(alpha: 0.35),
                 blurRadius: 15,
                 offset: const Offset(0, 6),
               ),
@@ -613,3 +606,5 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+
+

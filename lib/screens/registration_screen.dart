@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firebase_service.dart';
+import '../theme/app_colors.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -38,16 +39,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     'Other',
     'Prefer not to say',
   ];
-
-  // Enhanced pharma color palette
-  static const Color primaryTeal = Color(0xFF0D9488);
-  static const Color deepTeal = Color(0xFF0F766E);
-  static const Color mintGreen = Color(0xFF5EEAD4);
-  static const Color lightMint = Color(0xFFCCFBF1);
-  static const Color darkText = Color(0xFF134E4A);
-  static const Color grayText = Color(0xFF64748B);
-  static const Color inputBg = Color(0xFFF8FFFE);
-  static const Color borderColor = Color(0xFFE2E8F0);
 
   @override
   void initState() {
@@ -119,9 +110,9 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: primaryTeal,
+              primary: AppColors.primaryTeal,
               onPrimary: Colors.white,
-              onSurface: darkText,
+              onSurface: AppColors.darkText,
             ),
           ),
           child: child!,
@@ -217,7 +208,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: isError ? Colors.red.shade400 : primaryTeal,
+        backgroundColor: isError ? Colors.red.shade400 : AppColors.primaryTeal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -365,7 +356,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                   _obscurePassword
                                       ? Icons.visibility_off_outlined
                                       : Icons.visibility_outlined,
-                                  color: grayText,
+                                  color: AppColors.grayText,
                                 ),
                                 onPressed: () {
                                   setState(
@@ -397,7 +388,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                   _obscureConfirmPassword
                                       ? Icons.visibility_off_outlined
                                       : Icons.visibility_outlined,
-                                  color: grayText,
+                                  color: AppColors.grayText,
                                 ),
                                 onPressed: () {
                                   setState(
@@ -433,7 +424,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                       () => _agreedToTerms = value ?? false,
                                     );
                                   },
-                                  activeColor: primaryTeal,
+                                  activeColor: AppColors.primaryTeal,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(5),
                                   ),
@@ -445,14 +436,14 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                   text: TextSpan(
                                     style: const TextStyle(
                                       fontSize: 13,
-                                      color: grayText,
+                                      color: AppColors.grayText,
                                     ),
                                     children: [
                                       const TextSpan(text: 'I agree to the '),
                                       TextSpan(
                                         text: 'Terms of Service',
                                         style: TextStyle(
-                                          color: primaryTeal,
+                                          color: AppColors.primaryTeal,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -460,7 +451,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                       TextSpan(
                                         text: 'Privacy Policy',
                                         style: TextStyle(
-                                          color: primaryTeal,
+                                          color: AppColors.primaryTeal,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -482,7 +473,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                             children: [
                               const Text(
                                 'Already have an account? ',
-                                style: TextStyle(color: grayText, fontSize: 14),
+                                style: TextStyle(color: AppColors.grayText, fontSize: 14),
                               ),
                               GestureDetector(
                                 onTap: () {
@@ -494,7 +485,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                 child: const Text(
                                   'Log In',
                                   style: TextStyle(
-                                    color: primaryTeal,
+                                    color: AppColors.primaryTeal,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -534,7 +525,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [lightMint, Colors.transparent],
+                        colors: [AppColors.lightMint, Colors.transparent],
                       ),
                     ),
                   ),
@@ -552,7 +543,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          mintGreen.withValues(alpha: 0.3),
+                          AppColors.mintGreen.withValues(alpha: 0.3),
                           Colors.transparent,
                         ],
                       ),
@@ -572,7 +563,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
       ),
       child: IconButton(
         onPressed: () {
@@ -582,7 +573,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
             Navigator.pushReplacementNamed(context, '/splash');
           }
         },
-        icon: const Icon(Icons.arrow_back_ios_new, color: darkText, size: 18),
+        icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText, size: 18),
       ),
     );
   }
@@ -594,7 +585,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       children: [
         ShaderMask(
           shaderCallback: (bounds) => const LinearGradient(
-            colors: [deepTeal, primaryTeal],
+            colors: [AppColors.deepTeal, AppColors.primaryTeal],
           ).createShader(bounds),
           child: Text(
             isGoogleUser ? 'Complete Profile' : 'Create Account',
@@ -613,7 +604,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
               : 'Sign up to start your health journey',
           style: const TextStyle(
             fontSize: 15,
-            color: grayText,
+            color: AppColors.grayText,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -670,7 +661,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: darkText,
+        color: AppColors.darkText,
       ),
     );
   }
@@ -695,33 +686,33 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       validator: validator,
       style: const TextStyle(
         fontSize: 16,
-        color: darkText,
+        color: AppColors.darkText,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
-          color: grayText.withValues(alpha: 0.7),
+          color: AppColors.grayText.withValues(alpha: 0.7),
           fontWeight: FontWeight.w400,
         ),
         prefixIcon: Container(
           margin: const EdgeInsets.only(left: 4),
-          child: Icon(prefixIcon, color: grayText, size: 22),
+          child: Icon(prefixIcon, color: AppColors.grayText, size: 22),
         ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: inputBg,
+        fillColor: AppColors.inputBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: borderColor),
+          borderSide: BorderSide(color: AppColors.lightBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: borderColor),
+          borderSide: BorderSide(color: AppColors.lightBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: primaryTeal, width: 2),
+          borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -745,14 +736,14 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: inputBg,
+          color: AppColors.inputBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor),
+          border: Border.all(color: AppColors.lightBorderColor),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.calendar_today_outlined, color: grayText, size: 20),
+            Icon(Icons.calendar_today_outlined, color: AppColors.grayText, size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -762,8 +753,8 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 style: TextStyle(
                   fontSize: 15,
                   color: _selectedDate != null
-                      ? darkText
-                      : grayText.withValues(alpha: 0.7),
+                      ? AppColors.darkText
+                      : AppColors.grayText.withValues(alpha: 0.7),
                   fontWeight: _selectedDate != null
                       ? FontWeight.w500
                       : FontWeight.w400,
@@ -780,9 +771,9 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: inputBg,
+        color: AppColors.inputBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: AppColors.lightBorderColor),
       ),
       child: DropdownButtonFormField<String>(
         initialValue: _selectedGender,
@@ -790,7 +781,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         hint: Text(
           'Select',
           style: TextStyle(
-            color: grayText.withValues(alpha: 0.7),
+            color: AppColors.grayText.withValues(alpha: 0.7),
             fontSize: 14,
           ),
           overflow: TextOverflow.ellipsis,
@@ -800,15 +791,15 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           contentPadding: EdgeInsets.symmetric(vertical: 8),
           isDense: true,
         ),
-        icon: Icon(Icons.keyboard_arrow_down, color: grayText, size: 20),
+        icon: Icon(Icons.keyboard_arrow_down, color: AppColors.grayText, size: 20),
         dropdownColor: Colors.white,
-        style: const TextStyle(color: darkText, fontSize: 14),
+        style: const TextStyle(color: AppColors.darkText, fontSize: 14),
         items: _genderOptions.map((String gender) {
           return DropdownMenuItem<String>(
             value: gender,
             child: Text(
               gender,
-              style: const TextStyle(color: darkText, fontSize: 14),
+              style: const TextStyle(color: AppColors.darkText, fontSize: 14),
               overflow: TextOverflow.ellipsis,
             ),
           );
@@ -832,12 +823,12 @@ class _RegistrationScreenState extends State<RegistrationScreen>
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [primaryTeal, deepTeal],
+              colors: [AppColors.primaryTeal, AppColors.deepTeal],
             ),
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: primaryTeal.withValues(alpha: 0.35),
+                color: AppColors.primaryTeal.withValues(alpha: 0.35),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -867,3 +858,4 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     );
   }
 }
+

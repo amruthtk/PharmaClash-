@@ -7,7 +7,9 @@ import 'screens/medical_info_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
 import 'services/firebase_service.dart';
+import 'theme/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +36,7 @@ class HealthTrackerApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.teal,
-        scaffoldBackgroundColor: const Color(0xFFE8F5F3),
+        scaffoldBackgroundColor: AppColors.softWhite,
         fontFamily: 'Roboto',
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -49,12 +51,15 @@ class HealthTrackerApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF00897B), width: 2),
+            borderSide: const BorderSide(
+              color: AppColors.primaryTeal,
+              width: 2,
+            ),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF00897B),
+            backgroundColor: AppColors.primaryTeal,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
@@ -87,7 +92,7 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
-              child: CircularProgressIndicator(color: Color(0xFF00897B)),
+              child: CircularProgressIndicator(color: AppColors.primaryTeal),
             ),
           );
         }
@@ -101,7 +106,9 @@ class AuthWrapper extends StatelessWidget {
               if (profileSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(
-                    child: CircularProgressIndicator(color: Color(0xFF00897B)),
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryTeal,
+                    ),
                   ),
                 );
               }
@@ -115,10 +122,27 @@ class AuthWrapper extends StatelessWidget {
               // If no profile found (meaning they just signed up via Google and didn't finish registration)
               // or if critical fields like phone/DOB are missing
               final profile = profileSnapshot.data;
+
+              // Debug logging
+              debugPrint('=== AUTH WRAPPER DEBUG ===');
+              debugPrint('Profile: $profile');
+              debugPrint('isAdmin value: ${profile?['isAdmin']}');
+              debugPrint('isAdmin type: ${profile?['isAdmin']?.runtimeType}');
+
               if (profile == null || profile['phone'] == null) {
                 return const RegistrationScreen();
               }
 
+              // Check if user is admin
+              final isAdmin = profile['isAdmin'] == true;
+              debugPrint('isAdmin check result: $isAdmin');
+
+              if (isAdmin) {
+                debugPrint('>>> Routing to ADMIN DASHBOARD');
+                return const AdminDashboardScreen();
+              }
+
+              debugPrint('>>> Routing to USER DASHBOARD');
               return const DashboardScreen();
             },
           );
