@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../models/drug_model.dart';
+import '../models/user_medicine_model.dart';
 import '../services/drug_service.dart';
 import '../services/firebase_service.dart';
 import '../services/emergency_service.dart';
+import '../services/medicine_inventory_service.dart';
+import '../widgets/expiry_date_picker.dart';
 import '../theme/app_colors.dart';
 
 /// Scan states for the flow
@@ -54,6 +57,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   final FirebaseService _firebaseService = FirebaseService();
   final DrugService _drugService = DrugService();
   final EmergencyService _emergencyService = EmergencyService();
+  final MedicineInventoryService _inventoryService = MedicineInventoryService();
 
   @override
   void initState() {
@@ -291,6 +295,308 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
       _searchResults = [];
     });
     _startScanning();
+  }
+
+  /// Show bottom sheet to add medicines to cabinet with expiry date
+  void _showAddToCabinetSheet() {
+    final user = _firebaseService.currentUser;
+    if (user == null || _verifiedDrugs.isEmpty) return;
+
+    // Get the first drug to add (or could allow selecting multiple)
+    final drugResult = _verifiedDrugs.first;
+    final drug = drugResult.drug;
+
+    DateTime selectedExpiryDate = DateTime(
+      DateTime.now().year,
+      DateTime.now().month + 6,
+      1,
+    );
+    int selectedQuantity = 10;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.add_box_rounded,
+                          color: AppColors.primaryTeal,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Add to Cabinet',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.darkText,
+                              ),
+                            ),
+                            Text(
+                              drug.displayName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.grayText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Expiry Date Section
+                  const Text(
+                    'Expiry Date (check your medicine strip)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.darkText,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ExpiryDatePickerCompact(
+                    initialDate: selectedExpiryDate,
+                    onDateSelected: (date) {
+                      setModalState(() => selectedExpiryDate = date);
+                    },
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Quantity Section
+                  const Text(
+                    'Tablets in Strip',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.darkText,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildQuantityOption(10, selectedQuantity, (q) {
+                        setModalState(() => selectedQuantity = q);
+                      }),
+                      const SizedBox(width: 12),
+                      _buildQuantityOption(15, selectedQuantity, (q) {
+                        setModalState(() => selectedQuantity = q);
+                      }),
+                      const SizedBox(width: 12),
+                      _buildQuantityOption(30, selectedQuantity, (q) {
+                        setModalState(() => selectedQuantity = q);
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Add button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(context); // Close sheet
+                        await _addMedicineToCabinet(
+                          drug: drug,
+                          expiryDate: selectedExpiryDate,
+                          quantity: selectedQuantity,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryTeal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Add to My Cabinet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuantityOption(int quantity, int selected, Function(int) onTap) {
+    final isSelected = quantity == selected;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onTap(quantity),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primaryTeal.withValues(alpha: 0.1)
+                : AppColors.inputBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primaryTeal
+                  : AppColors.lightBorderColor,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                '$quantity',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? AppColors.primaryTeal
+                      : AppColors.darkText,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'tablets',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected
+                      ? AppColors.primaryTeal
+                      : AppColors.grayText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addMedicineToCabinet({
+    required DrugModel drug,
+    required DateTime expiryDate,
+    required int quantity,
+  }) async {
+    final user = _firebaseService.currentUser;
+    if (user == null) return;
+
+    try {
+      // Check if already in cabinet
+      final existing = await _inventoryService.findMedicineByDrugId(
+        user.uid,
+        drug.id ?? '',
+      );
+
+      if (existing != null) {
+        // Update existing with new strip
+        await _inventoryService.updateStrip(
+          user.uid,
+          existing.id!,
+          newExpiryDate: expiryDate,
+          addQuantity: quantity,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Updated ${drug.displayName} in your cabinet!'),
+              backgroundColor: AppColors.primaryTeal,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      } else {
+        // Add new medicine
+        final newMedicine = UserMedicine(
+          drugId: drug.id ?? '',
+          medicineName: drug.displayName,
+          category: drug.category,
+          expiryDate: expiryDate,
+          tabletCount: quantity,
+        );
+        await _inventoryService.addMedicine(user.uid, newMedicine);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${drug.displayName} added to your cabinet!'),
+              backgroundColor: AppColors.primaryTeal,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      }
+
+      // Reset scan
+      _resetScan();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -796,6 +1102,34 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                     ],
                   ],
                 ),
+                // Dietary and Alcohol Warning Icons
+                if (drug.hasDietaryWarning || drug.hasAlcoholWarning) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      // Dietary/Food restriction icons
+                      if (drug.hasDietaryWarning)
+                        ...drug.foodInteractions.map(
+                          (food) => _buildWarningIcon(
+                            icon: Icons.restaurant,
+                            label: food.food,
+                            severity: food.severity,
+                            isFood: true,
+                          ),
+                        ),
+                      // Alcohol restriction icon
+                      if (drug.hasAlcoholWarning)
+                        _buildWarningIcon(
+                          icon: Icons.local_bar,
+                          label: 'Alcohol',
+                          severity: drug.alcoholRestriction,
+                          isFood: false,
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -809,6 +1143,62 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Build a small warning icon for dietary/alcohol restrictions
+  Widget _buildWarningIcon({
+    required IconData icon,
+    required String label,
+    required String severity,
+    required bool isFood,
+  }) {
+    // Determine color based on severity
+    Color bgColor;
+    Color iconColor;
+
+    switch (severity.toLowerCase()) {
+      case 'avoid':
+        bgColor = Colors.red.shade100;
+        iconColor = Colors.red.shade700;
+        break;
+      case 'caution':
+        bgColor = Colors.orange.shade100;
+        iconColor = Colors.orange.shade700;
+        break;
+      case 'limit':
+        bgColor = Colors.amber.shade100;
+        iconColor = Colors.amber.shade700;
+        break;
+      default:
+        bgColor = Colors.grey.shade100;
+        iconColor = Colors.grey.shade600;
+    }
+
+    return Tooltip(
+      message: isFood ? '$label: $severity' : 'Alcohol: $severity',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: iconColor),
+            const SizedBox(width: 3),
+            Text(
+              label.length > 10 ? '${label.substring(0, 8)}...' : label,
+              style: TextStyle(
+                fontSize: 9,
+                color: iconColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1073,7 +1463,8 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
         child: SafeArea(
           child: Column(
             children: [
-              const SizedBox(height: 20),
+              // Add extra spacing to clear the top bar header
+              const SizedBox(height: 70),
 
               // 🚨 HIGH RISK BANNER
               if (isHighRisk) _buildHighRiskBanner(),
@@ -1291,6 +1682,25 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                   Colors.orange,
                 ),
               ),
+            // Food interaction warnings
+            if (result.drug.foodInteractions.isNotEmpty)
+              ...result.drug.foodInteractions.map(
+                (food) => _buildWarningSection(
+                  'FOOD RESTRICTION',
+                  '${food.food}: ${food.description}',
+                  food.severity == 'avoid' ? Colors.red : Colors.amber,
+                ),
+              ),
+            // Alcohol warning
+            if (result.drug.hasAlcoholWarning)
+              _buildWarningSection(
+                'ALCOHOL WARNING',
+                result.drug.alcoholWarningDescription ??
+                    'Avoid alcohol while taking this medication.',
+                result.drug.alcoholRestriction == 'avoid'
+                    ? Colors.red
+                    : Colors.amber,
+              ),
             // Emergency Alert Button for high-risk
             if (result.riskLevel == 'high') _buildEmergencyAlertButton(result),
           ] else ...[
@@ -1469,20 +1879,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
             const SizedBox(width: 16),
             Expanded(
               child: GestureDetector(
-                onTap: () {
-                  // Add to cabinet logic (mock)
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Added to your medicine cabinet!'),
-                      backgroundColor: AppColors.primaryTeal,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  );
-                  Navigator.pop(context);
-                },
+                onTap: _showAddToCabinetSheet,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
