@@ -47,9 +47,33 @@ dependencies:
   
   # Emergency notifications
   url_launcher: ^6.2.5
+  
+  # Offline connectivity detection
+  connectivity_plus: ^6.0.0
+  
+  # Dose reminder notifications
+  flutter_local_notifications: ^19.0.0
+  timezone: ^0.10.0
+  
+  # PDF Report Generation
+  pdf: ^3.11.2
+  printing: ^5.13.4
+  path_provider: ^2.1.5
+  
+  # Biometric authentication
+  local_auth: ^2.3.0
+  
+  # Secure storage for biometric login credentials
+  flutter_secure_storage: ^9.2.2
+  
+  # Haptic feedback for scan success
+  vibration: ^2.0.1
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to

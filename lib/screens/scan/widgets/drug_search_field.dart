@@ -35,6 +35,7 @@ class DrugSearchField extends StatelessWidget {
   Widget _buildTextField() {
     return TextField(
       controller: controller,
+      autofocus: true, // Auto-show keyboard when entering manual search
       style: const TextStyle(color: AppColors.darkText),
       decoration: InputDecoration(
         hintText: 'Search medicine by name...',

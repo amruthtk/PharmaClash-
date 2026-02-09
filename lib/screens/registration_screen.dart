@@ -103,9 +103,11 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+      // Default to 1990 for better UX - elderly users won't have to scroll far
+      initialDate: DateTime(1990, 1, 1),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year, // Start with year selection
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -473,7 +475,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                             children: [
                               const Text(
                                 'Already have an account? ',
-                                style: TextStyle(color: AppColors.grayText, fontSize: 14),
+                                style: TextStyle(
+                                  color: AppColors.grayText,
+                                  fontSize: 14,
+                                ),
                               ),
                               GestureDetector(
                                 onTap: () {
@@ -573,7 +578,11 @@ class _RegistrationScreenState extends State<RegistrationScreen>
             Navigator.pushReplacementNamed(context, '/splash');
           }
         },
-        icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText, size: 18),
+        icon: const Icon(
+          Icons.arrow_back_ios_new,
+          color: AppColors.darkText,
+          size: 18,
+        ),
       ),
     );
   }
@@ -743,7 +752,11 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.calendar_today_outlined, color: AppColors.grayText, size: 20),
+            Icon(
+              Icons.calendar_today_outlined,
+              color: AppColors.grayText,
+              size: 20,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -791,7 +804,11 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           contentPadding: EdgeInsets.symmetric(vertical: 8),
           isDense: true,
         ),
-        icon: Icon(Icons.keyboard_arrow_down, color: AppColors.grayText, size: 20),
+        icon: Icon(
+          Icons.keyboard_arrow_down,
+          color: AppColors.grayText,
+          size: 20,
+        ),
         dropdownColor: Colors.white,
         style: const TextStyle(color: AppColors.darkText, fontSize: 14),
         items: _genderOptions.map((String gender) {
@@ -858,4 +875,3 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     );
   }
 }
-

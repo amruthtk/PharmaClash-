@@ -45,3 +45,6 @@ app.*.map.json
 /android/app/release
 
 firebase_options.dart
+CODE_WALKTHROUGH.md
+implementation_plan.md
+user_story_mapping.md

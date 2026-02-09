@@ -4,6 +4,7 @@ import '../models/medical_reference_data.dart';
 import '../theme/app_colors.dart';
 import '../services/firebase_service.dart';
 import '../services/emergency_service.dart';
+import '../services/biometric_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,11 +17,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     with TickerProviderStateMixin {
   final FirebaseService _firebaseService = FirebaseService();
   final EmergencyService _emergencyService = EmergencyService();
+  final BiometricService _biometricService = BiometricService();
 
   // User data
   Map<String, dynamic>? _userProfile;
   Map<String, dynamic>? _medicalInfo;
   bool _isLoading = true;
+
+  // Biometric settings
+  bool _canUseBiometrics = false;
+  bool _biometricEnabled = false;
 
   late AnimationController _floatController;
 
@@ -33,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     )..repeat(reverse: true);
 
     _loadUserData();
+    _checkBiometrics();
   }
 
   @override
@@ -63,6 +70,21 @@ class _ProfileScreenState extends State<ProfileScreen>
         setState(() => _isLoading = false);
         _showSnackBar('Error loading profile: $e', isError: true);
       }
+    }
+  }
+
+  Future<void> _checkBiometrics() async {
+    try {
+      final canUse = await _biometricService.canUseBiometrics();
+      final isEnabled = await _biometricService.isBiometricEnabled();
+      if (mounted) {
+        setState(() {
+          _canUseBiometrics = canUse;
+          _biometricEnabled = isEnabled;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking biometrics: $e');
     }
   }
 
@@ -486,7 +508,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               Text(
                 _allergies.isEmpty
                     ? 'No allergies recorded'
-                    : '${_allergies.length} allergies',
+                    : '${_allergies.length} ${_allergies.length == 1 ? 'allergy' : 'allergies'}',
                 style: const TextStyle(fontSize: 14, color: AppColors.grayText),
               ),
               _buildEditButton(onTap: () => _showEditAllergiesDialog()),
@@ -562,7 +584,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               Text(
                 _conditions.isEmpty
                     ? 'No conditions recorded'
-                    : '${_conditions.length} conditions',
+                    : '${_conditions.length} ${_conditions.length == 1 ? 'condition' : 'conditions'}',
                 style: const TextStyle(fontSize: 14, color: AppColors.grayText),
               ),
               _buildEditButton(onTap: () => _showEditConditionsDialog()),
@@ -886,6 +908,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: Column(
         children: [
+          // Biometric Login Toggle
+          if (_canUseBiometrics) ...[
+            _buildBiometricTile(),
+            Container(height: 1, color: AppColors.lightBorderColor),
+          ],
           _buildActionTile(
             icon: Icons.refresh_rounded,
             title: 'Refresh Profile',
@@ -912,6 +939,237 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildBiometricTile() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () =>
+            _biometricEnabled ? _disableBiometric() : _enableBiometric(),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.fingerprint,
+                  color: AppColors.primaryTeal,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Biometric Login',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.darkText,
+                      ),
+                    ),
+                    Text(
+                      _biometricEnabled
+                          ? 'Enabled - Use fingerprint to login'
+                          : 'Disabled - Tap to enable',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.grayText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _biometricEnabled,
+                onChanged: (value) {
+                  if (value) {
+                    _enableBiometric();
+                  } else {
+                    _disableBiometric();
+                  }
+                },
+                activeTrackColor: AppColors.primaryTeal,
+                thumbColor: WidgetStateProperty.all(Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _enableBiometric() async {
+    // Show dialog to get password for secure storage
+    final passwordController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.fingerprint,
+                color: AppColors.primaryTeal,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Enable Biometric'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your password to enable fingerprint login. Your credentials will be stored securely on this device.',
+              style: TextStyle(fontSize: 14, color: AppColors.grayText),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryTeal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && passwordController.text.isNotEmpty) {
+      final email = _userEmail;
+      final password = passwordController.text;
+
+      final success = await _biometricService.enableBiometricLogin(
+        email: email,
+        password: password,
+      );
+
+      if (success && mounted) {
+        setState(() => _biometricEnabled = true);
+        _showSnackBar('Biometric login enabled!');
+      } else if (mounted) {
+        // Offer to save without verification
+        final retry = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text('Verification Failed'),
+            content: const Text(
+              'Fingerprint verification was cancelled or failed. Would you like to enable biometric login without verification?\n\nYou can use your fingerprint or device PIN to login later.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryTeal,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Enable Anyway'),
+              ),
+            ],
+          ),
+        );
+
+        if (retry == true) {
+          final retrySuccess = await _biometricService.enableBiometricLogin(
+            email: email,
+            password: password,
+            skipVerification: true,
+          );
+          if (retrySuccess && mounted) {
+            setState(() => _biometricEnabled = true);
+            _showSnackBar('Biometric login enabled!');
+          } else if (mounted) {
+            _showSnackBar('Failed to enable biometric login', isError: true);
+          }
+        }
+      }
+    }
+
+    passwordController.dispose();
+  }
+
+  Future<void> _disableBiometric() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Disable Biometric'),
+        content: const Text(
+          'Are you sure you want to disable biometric login? You will need to enter your email and password to log in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade500,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Disable'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final success = await _biometricService.disableBiometricLogin();
+      if (success && mounted) {
+        setState(() => _biometricEnabled = false);
+        _showSnackBar('Biometric login disabled');
+      }
+    }
   }
 
   Widget _buildActionTile({

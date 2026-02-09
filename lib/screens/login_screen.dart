@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
+import '../services/biometric_service.dart';
 import '../widgets/google_icon.dart';
 import '../theme/app_colors.dart';
 
@@ -20,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoading = false;
+  bool _canCheckBiometrics = false;
+  bool _isAuthenticating = false;
 
   late AnimationController _animationController;
   late AnimationController _floatController;
@@ -27,6 +30,8 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<Offset> _slideAnimation;
 
   final FirebaseService _firebaseService = FirebaseService();
+  final BiometricService _biometricService = BiometricService();
+  bool _biometricEnabled = false;
 
   @override
   void initState() {
@@ -57,6 +62,84 @@ class _LoginScreenState extends State<LoginScreen>
     )..repeat(reverse: true);
 
     _animationController.forward();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    try {
+      final canCheck = await _biometricService.canUseBiometrics();
+      final isEnabled = await _biometricService.isBiometricEnabled();
+      if (mounted) {
+        setState(() {
+          _canCheckBiometrics = canCheck;
+          _biometricEnabled = isEnabled;
+        });
+      }
+    } catch (e) {
+      debugPrint('Biometrics check failed: $e');
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    if (_isAuthenticating) return;
+
+    // Check if biometric is enabled
+    final isEnabled = await _biometricService.isBiometricEnabled();
+    if (!isEnabled) {
+      _showInfoSnackBar(
+        'Biometric login is not set up. Please enable it in your Profile settings after logging in.',
+      );
+      return;
+    }
+
+    setState(() => _isAuthenticating = true);
+
+    try {
+      // Authenticate and get stored credentials
+      final credentials = await _biometricService
+          .authenticateAndGetCredentials();
+
+      if (credentials != null && mounted) {
+        // Perform actual login with stored credentials
+        await _firebaseService.signInWithEmailAndPassword(
+          email: credentials['email']!,
+          password: credentials['password']!,
+        );
+
+        if (mounted) {
+          _showSuccessSnackBar('Welcome back!');
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+        }
+      } else if (mounted) {
+        _showErrorSnackBar('Biometric authentication failed');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Login failed: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAuthenticating = false);
+      }
+    }
+  }
+
+  void _showInfoSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.orange.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   @override
@@ -252,11 +335,21 @@ class _LoginScreenState extends State<LoginScreen>
                           _buildRememberForgotRow(),
                           const SizedBox(height: 32),
 
-                          // Login Button
-                          _buildPrimaryButton(
-                            label: 'Log In',
-                            onPressed: _isLoading ? null : _handleLogin,
-                            isLoading: _isLoading,
+                          // Login Button with Biometric
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildPrimaryButton(
+                                  label: 'Log In',
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  isLoading: _isLoading,
+                                ),
+                              ),
+                              if (_canCheckBiometrics) ...[
+                                const SizedBox(width: 12),
+                                _buildBiometricButton(),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 28),
 
@@ -371,7 +464,11 @@ class _LoginScreenState extends State<LoginScreen>
             Navigator.pushReplacementNamed(context, '/splash');
           }
         },
-        icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.darkText, size: 18),
+        icon: const Icon(
+          Icons.arrow_back_ios_new,
+          color: AppColors.darkText,
+          size: 18,
+        ),
       ),
     );
   }
@@ -611,6 +708,66 @@ class _LoginScreenState extends State<LoginScreen>
                         size: 20,
                       ),
                     ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBiometricButton() {
+    return Tooltip(
+      message: _biometricEnabled
+          ? 'Login with fingerprint'
+          : 'Set up fingerprint login in Profile after logging in',
+      child: GestureDetector(
+        onTap: _isAuthenticating ? null : _handleBiometricLogin,
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            gradient: _biometricEnabled
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.primaryTeal, AppColors.deepTeal],
+                  )
+                : null,
+            color: _biometricEnabled
+                ? null
+                : AppColors.primaryTeal.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+            border: _biometricEnabled
+                ? null
+                : Border.all(
+                    color: AppColors.primaryTeal.withValues(alpha: 0.3),
+                  ),
+            boxShadow: _biometricEnabled
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryTeal.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: _isAuthenticating
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(
+                    Icons.fingerprint,
+                    color: _biometricEnabled
+                        ? Colors.white
+                        : AppColors.primaryTeal,
+                    size: 28,
                   ),
           ),
         ),
@@ -878,15 +1035,22 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                   fillColor: AppColors.inputBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.lightBorderColor),
+                    borderSide: const BorderSide(
+                      color: AppColors.lightBorderColor,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.lightBorderColor),
+                    borderSide: const BorderSide(
+                      color: AppColors.lightBorderColor,
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: AppColors.primaryTeal, width: 2),
+                    borderSide: BorderSide(
+                      color: AppColors.primaryTeal,
+                      width: 2,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -1018,7 +1182,3 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
     );
   }
 }
-
-
-
-

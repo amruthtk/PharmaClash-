@@ -232,7 +232,14 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
             description: 'May reduce contraceptive effectiveness',
           ),
         ],
-        foodInteractions: [],
+        foodInteractions: [
+          FoodInteraction(
+            food: 'Dairy (Milk, Curd)',
+            severity: 'caution',
+            description:
+                'Take 1-2 hours apart from dairy for better absorption',
+          ),
+        ],
       ),
       // Saridon
       DrugModel(
@@ -1131,6 +1138,11 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
             "target": "Clopidogrel",
             "risk": "Med",
             "note": "Double blood-thinning effect; needs doctor supervision.",
+          },
+          {
+            "target": "Warfarin",
+            "risk": "Critical",
+            "note": "Extreme bleeding risk. Often fatal.",
           },
         ],
       },
@@ -2527,7 +2539,10 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
         ),
         title: Text(
           'Data Migration',
-          style: TextStyle(color: AppColors.lightText, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: AppColors.lightText,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: Padding(
@@ -2541,7 +2556,9 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primaryTeal.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primaryTeal.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.primaryTeal.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -2550,7 +2567,10 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
                   Expanded(
                     child: Text(
                       'This will upload 50 drugs to your Firebase database. This is a one-time operation.',
-                      style: TextStyle(color: AppColors.lightText, fontSize: 13),
+                      style: TextStyle(
+                        color: AppColors.lightText,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -2691,4 +2711,3 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
     );
   }
 }
-

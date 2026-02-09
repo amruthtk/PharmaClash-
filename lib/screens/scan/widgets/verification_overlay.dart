@@ -336,12 +336,26 @@ class VerificationOverlay extends StatelessWidget {
         if (drug.hasAlcoholWarning)
           _buildWarningIcon(
             icon: Icons.local_bar,
-            label: 'Alcohol',
+            // Changed from "Alcohol" to actionable text to avoid ambiguity
+            label: _getAlcoholLabel(drug.alcoholRestriction),
             severity: drug.alcoholRestriction,
             isFood: false,
           ),
       ],
     );
+  }
+
+  String _getAlcoholLabel(String restriction) {
+    switch (restriction.toLowerCase()) {
+      case 'avoid':
+        return 'Avoid Alcohol';
+      case 'limit':
+        return 'Limit Alcohol';
+      case 'caution':
+        return 'Alcohol Caution';
+      default:
+        return 'No Alcohol';
+    }
   }
 
   Widget _buildWarningIcon({

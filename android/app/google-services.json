@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "452798895034-vjft3166ci4infpt5saghif6tmq7s152.apps.googleusercontent.com",
+          "client_id": "452798895034-eq2e9e78pqfbb47aj0ge8avd2tnrdofg.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.pharmaclash",
-            "certificate_hash": "3c5701df34f83f5490ea42911fdcfea0e0696856"
+            "certificate_hash": "5ad4d43fb242cb74b176ce90261e1bc969873b9f"
           }
         },
         {
