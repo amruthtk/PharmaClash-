@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/user_medicine_model.dart';
+import '../models/drug_model.dart';
 import 'notification_service.dart';
 
 /// Service for managing user's medicine cabinet in Firestore
@@ -61,6 +63,37 @@ class MedicineInventoryService {
       return docRef.id;
     } catch (e) {
       throw 'Failed to add medicine: $e';
+    }
+  }
+
+  /// Add a DrugModel to cabinet (from scanning flow)
+  Future<String> addDrugToCabinet(
+    String uid,
+    DrugModel drug, {
+    int? tabletCount,
+    List<String>? scheduleTimes,
+    DateTime? expiryDate,
+  }) async {
+    try {
+      final medicine = UserMedicine(
+        drugId: drug.id ?? '',
+        medicineName: drug.matchedBrandName ?? drug.displayName,
+        category: drug.category,
+        tabletCount: tabletCount ?? 10,
+        scheduleTimes: scheduleTimes ?? [],
+        expiryDate:
+            expiryDate ??
+            DateTime.now().add(const Duration(days: 730)), // Default 2yr
+        foodWarnings: drug.hasDietaryWarning
+            ? drug.foodInteractions
+                  .map((f) => "[${f.severity}] ${f.food}: ${f.description}")
+                  .toList()
+            : [],
+      );
+
+      return await addMedicine(uid, medicine);
+    } catch (e) {
+      throw 'Failed to add drug to cabinet: $e';
     }
   }
 
@@ -253,8 +286,26 @@ class MedicineInventoryService {
     String? scheduledTime,
   }) async {
     try {
-      // Log the dose
-      await _doseLogsCollection(uid).add({
+      final medDocRef = _medicinesCollection(uid).doc(medicineId);
+      final logDocRef = _doseLogsCollection(uid).doc(); // New random ID
+
+      // Fetch medicine once to check stock and schedule
+      final medDoc = await medDocRef.get();
+      final medData = medDoc.data();
+      if (medData == null) throw 'Medicine not found';
+
+      final currentCount = medData['tabletCount'] ?? 0;
+      if (currentCount <= 0) {
+        throw 'Cannot log dose: Stock is empty';
+      }
+
+      final newCount = (currentCount - quantity).clamp(0, 9999);
+
+      // Perform all server updates in a single batch
+      final batch = _firestore.batch();
+
+      // 1. Add log entry
+      batch.set(logDocRef, {
         'medicineId': medicineId,
         'medicineName': medicineName,
         'takenAt': FieldValue.serverTimestamp(),
@@ -262,36 +313,26 @@ class MedicineInventoryService {
         'quantityTaken': quantity,
       });
 
-      // Cancel follow-up reminder since dose was logged
-      // Find which dose index this corresponds to
+      // 2. Update tablet count
+      batch.update(medDocRef, {
+        'tabletCount': newCount,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Commit early so user sees result
+      await batch.commit();
+
+      // 3. Cancel follow-up reminder (runs in background)
       if (scheduledTime != null) {
-        final doc = await _medicinesCollection(uid).doc(medicineId).get();
-        final scheduleTimes = List<String>.from(
-          doc.data()?['scheduleTimes'] ?? [],
-        );
+        final scheduleTimes = List<String>.from(medData['scheduleTimes'] ?? []);
         final doseIndex = scheduleTimes.indexOf(scheduledTime);
         if (doseIndex >= 0) {
-          await _notificationService.cancelFollowUp(
+          _notificationService.cancelFollowUp(
             medicineId: medicineId,
             doseIndex: doseIndex,
           );
         }
       }
-
-      // Decrement tablet count
-      final doc = await _medicinesCollection(uid).doc(medicineId).get();
-      final currentCount = doc.data()?['tabletCount'] ?? 0;
-
-      if (currentCount <= 0) {
-        throw 'Cannot log dose: Stock is empty';
-      }
-
-      final newCount = (currentCount - quantity).clamp(0, 9999);
-
-      await _medicinesCollection(uid).doc(medicineId).update({
-        'tabletCount': newCount,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
     } catch (e) {
       throw 'Failed to log dose: $e';
     }
@@ -357,6 +398,141 @@ class MedicineInventoryService {
       return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
     } catch (e) {
       throw 'Failed to get medicine dose logs: $e';
+    }
+  }
+
+  /// Calculate adherence streak and 7-day data.
+  /// Returns a map with keys: currentStreak, longestStreak, weeklyAdherence.
+  Future<Map<String, dynamic>> getAdherenceData(
+    String uid, {
+    List<UserMedicine>? medicines,
+  }) async {
+    try {
+      final allMedicines = medicines ?? await getUserMedicines(uid);
+      final scheduledMedicines = allMedicines
+          .where((m) => m.scheduleTimes.isNotEmpty && !m.isExpired)
+          .toList();
+
+      if (scheduledMedicines.isEmpty) {
+        return {
+          'currentStreak': 0,
+          'longestStreak': 0,
+          'weeklyAdherence': List.filled(7, 0.0),
+        };
+      }
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final thirtyDaysAgo = today.subtract(const Duration(days: 35));
+
+      // Get logs only for the last 35 days (focused query)
+      final snapshot = await _doseLogsCollection(uid)
+          .where(
+            'takenAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
+          )
+          .orderBy('takenAt', descending: true)
+          .get();
+
+      final logs = snapshot.docs
+          .map((doc) => {...doc.data(), 'id': doc.id})
+          .toList();
+
+      // Total expected doses per day
+      final expectedDosesPerDay = scheduledMedicines.fold<int>(
+        0,
+        (total, m) => total + m.scheduleTimes.length,
+      );
+
+      if (expectedDosesPerDay == 0) {
+        return {
+          'currentStreak': 0,
+          'longestStreak': 0,
+          'weeklyAdherence': List.filled(7, 0.0),
+        };
+      }
+
+      // Count unique scheduled doses per day
+      // Key: dateKey, Value: Set of "medicineId|scheduledTime"
+      final Map<String, Set<String>> uniqueDosesPerDay = {};
+
+      for (final log in logs) {
+        final takenAt = log['takenAt'];
+        final medicineId = log['medicineId'] as String?;
+        final schTime = log['scheduledTime'] as String?;
+
+        if (takenAt == null || medicineId == null || schTime == null) continue;
+
+        final logDate = (takenAt as Timestamp).toDate();
+        final dateKey = '${logDate.year}-${logDate.month}-${logDate.day}';
+
+        uniqueDosesPerDay.putIfAbsent(dateKey, () => <String>{});
+        uniqueDosesPerDay[dateKey]!.add('$medicineId|$schTime');
+      }
+
+      // Calculate current streak (consecutive days with >= 80% adherence)
+      int currentStreak = 0;
+      int longestStreak = 0;
+      int tempStreak = 0;
+
+      for (int i = 0; i < 30; i++) {
+        final checkDate = today.subtract(Duration(days: i));
+        final dateKey = '${checkDate.year}-${checkDate.month}-${checkDate.day}';
+        final dosesTakenCount = uniqueDosesPerDay[dateKey]?.length ?? 0;
+        final adherence = dosesTakenCount / expectedDosesPerDay;
+
+        if (adherence >= 0.8) {
+          tempStreak++;
+          if (i == currentStreak) {
+            currentStreak = tempStreak;
+          }
+        } else {
+          // If it's today and we haven't failed yet (0 doses taken), don't break streak
+          if (i == 0 && dosesTakenCount == 0) {
+            continue;
+          }
+          // If it's today and we've taken some but not all, check if it's still early?
+          // For now, let's keep it simple: only break if adherence is truly low and it's not "early today"
+          if (i == 0 && adherence < 0.8) {
+            // Don't break streak FOR TODAY if it's early, but also don't increment it
+            // Tweak: if adherence is > 0 but < 80% today, we don't break but we don't count it as a "full day" yet
+            continue;
+          }
+          tempStreak = 0;
+        }
+        longestStreak = tempStreak > longestStreak ? tempStreak : longestStreak;
+      }
+
+      // Calculate 7-day adherence heatmap (Mon=0, Sun=6)
+      final weekStart = today.subtract(Duration(days: today.weekday - 1));
+      final List<double> weeklyAdherence = List.filled(7, 0.0);
+
+      for (int i = 0; i < 7; i++) {
+        final dayDate = weekStart.add(Duration(days: i));
+        if (dayDate.isAfter(today)) break;
+
+        final dateKey = '${dayDate.year}-${dayDate.month}-${dayDate.day}';
+        final dosesTakenCount = uniqueDosesPerDay[dateKey]?.length ?? 0;
+
+        // Final adherence value for the heatmap
+        weeklyAdherence[i] = (dosesTakenCount / expectedDosesPerDay).clamp(
+          0.0,
+          1.0,
+        );
+      }
+
+      return {
+        'currentStreak': currentStreak,
+        'longestStreak': longestStreak,
+        'weeklyAdherence': weeklyAdherence,
+      };
+    } catch (e) {
+      debugPrint('Error in getAdherenceData: $e');
+      return {
+        'currentStreak': 0,
+        'longestStreak': 0,
+        'weeklyAdherence': List.filled(7, 0.0),
+      };
     }
   }
 }
