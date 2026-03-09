@@ -21,11 +21,11 @@ class EmergencyService {
       if (medicalInfo == null) return null;
 
       final name = medicalInfo['caregiverName'] as String?;
-      final phone = medicalInfo['caregiverPhone'] as String?;
+      final email = medicalInfo['caregiverEmail'] as String?;
 
-      if (phone == null || phone.isEmpty) return null;
+      if (email == null || email.isEmpty) return null;
 
-      return {'name': name ?? 'Caregiver', 'phone': phone};
+      return {'name': name ?? 'Caregiver', 'email': email};
     } catch (e) {
       debugPrint('Error getting caregiver info: $e');
       return null;
@@ -35,41 +35,51 @@ class EmergencyService {
   /// Check if caregiver is configured
   Future<bool> hasCaregiverConfigured() async {
     final info = await getCaregiverInfo();
-    return info != null && info['phone']!.isNotEmpty;
+    return info != null && info['email']!.isNotEmpty;
   }
 
-  /// Send SMS alert to caregiver
-  Future<bool> sendSMSAlert({
-    required String message,
-    String? customPhone,
+  /// Send Email alert to caregiver
+  Future<bool> sendEmailAlert({
+    String? email,
+    String? patientName,
+    String? subject,
+    String? body,
   }) async {
     try {
-      String? phone = customPhone;
+      String? targetEmail = email;
 
-      if (phone == null) {
+      if (targetEmail == null) {
         final caregiverInfo = await getCaregiverInfo();
         if (caregiverInfo == null) {
-          debugPrint('No caregiver phone configured');
+          debugPrint('No caregiver email configured');
           return false;
         }
-        phone = caregiverInfo['phone'];
+        targetEmail = caregiverInfo['email'];
       }
 
-      final smsUri = Uri(
-        scheme: 'sms',
-        path: phone,
-        queryParameters: {'body': message},
+      final String mailSubject =
+          subject ??
+          'PHARMACLASH ALERT: ${patientName ?? 'Patient'} needs attention';
+      final String mailBody =
+          body ??
+          'Hello, this is an automated alert from PharmaClash regarding medication interaction risks.';
+
+      final emailUri = Uri(
+        scheme: 'mailto',
+        path: targetEmail,
+        query:
+            'subject=${Uri.encodeComponent(mailSubject)}&body=${Uri.encodeComponent(mailBody)}',
       );
 
-      if (await canLaunchUrl(smsUri)) {
-        await launchUrl(smsUri);
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
         return true;
       } else {
-        debugPrint('Could not launch SMS');
+        debugPrint('Could not launch Email');
         return false;
       }
     } catch (e) {
-      debugPrint('Error sending SMS: $e');
+      debugPrint('Error sending Email: $e');
       return false;
     }
   }
@@ -147,7 +157,7 @@ class EmergencyService {
       isScrollControlled: true,
       builder: (context) => _EmergencyOptionsSheet(
         caregiverName: caregiverInfo?['name'] ?? 'Caregiver',
-        caregiverPhone: caregiverInfo?['phone'],
+        caregiverEmail: caregiverInfo?['email'],
         drugName: drugName,
         warningType: warningType,
         alertMessage: generateDrugAlertMessage(
@@ -156,18 +166,17 @@ class EmergencyService {
           warningType: warningType,
           details: details,
         ),
-        onCallCaregiver: caregiverInfo != null
-            ? () => callCaregiver(customPhone: caregiverInfo['phone'])
-            : null,
-        onSendSMS: caregiverInfo != null
-            ? () => sendSMSAlert(
-                message: generateDrugAlertMessage(
+        onSendEmail: caregiverInfo != null
+            ? () => sendEmailAlert(
+                email: caregiverInfo['email'],
+                patientName: userName,
+                subject: 'PHARMACLASH ALERT: $warningType Detected',
+                body: generateDrugAlertMessage(
                   patientName: userName,
                   drugName: drugName,
                   warningType: warningType,
                   details: details,
                 ),
-                customPhone: caregiverInfo['phone'],
               )
             : null,
       ),
@@ -178,26 +187,24 @@ class EmergencyService {
 /// Bottom sheet for emergency options
 class _EmergencyOptionsSheet extends StatelessWidget {
   final String caregiverName;
-  final String? caregiverPhone;
+  final String? caregiverEmail;
   final String drugName;
   final String warningType;
   final String alertMessage;
-  final Future<bool> Function()? onCallCaregiver;
-  final Future<bool> Function()? onSendSMS;
+  final Future<bool> Function()? onSendEmail;
 
   const _EmergencyOptionsSheet({
     required this.caregiverName,
-    this.caregiverPhone,
+    this.caregiverEmail,
     required this.drugName,
     required this.warningType,
     required this.alertMessage,
-    this.onCallCaregiver,
-    this.onSendSMS,
+    this.onSendEmail,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasCaregiver = caregiverPhone != null && caregiverPhone!.isNotEmpty;
+    final hasCaregiver = caregiverEmail != null && caregiverEmail!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -299,7 +306,7 @@ class _EmergencyOptionsSheet extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            caregiverPhone!,
+                            caregiverEmail!,
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey.shade600,
@@ -317,30 +324,14 @@ class _EmergencyOptionsSheet extends StatelessWidget {
               // Action buttons
               Row(
                 children: [
-                  // Call button
                   Expanded(
                     child: _ActionButton(
-                      icon: Icons.phone_rounded,
-                      label: 'Call Now',
-                      color: Colors.green,
+                      icon: Icons.email_rounded,
+                      label: 'Email Caregiver',
+                      color: Colors.teal.shade600,
                       onTap: () async {
-                        if (onCallCaregiver != null) {
-                          await onCallCaregiver!();
-                          if (context.mounted) Navigator.pop(context);
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // SMS button
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.message_rounded,
-                      label: 'Send SMS',
-                      color: Colors.blue,
-                      onTap: () async {
-                        if (onSendSMS != null) {
-                          await onSendSMS!();
+                        if (onSendEmail != null) {
+                          await onSendEmail!();
                           if (context.mounted) Navigator.pop(context);
                         }
                       },

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import '../models/user_medicine_model.dart';
 
 /// Service for managing dose reminder notifications
@@ -23,6 +24,16 @@ class NotificationService {
 
     // Initialize timezone
     tz_data.initializeTimeZones();
+    try {
+      final dynamic tzData = await FlutterTimezone.getLocalTimezone();
+      // Use toString if it's a simple name string, otherwise try .id or .name
+      final String timeZoneName = tzData is String
+          ? tzData
+          : (tzData?.toString() ?? 'UTC');
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+    } catch (e) {
+      debugPrint('Error setting local timezone (fallback to UTC): $e');
+    }
 
     // Android settings
     const androidSettings = AndroidInitializationSettings(
@@ -178,7 +189,7 @@ class NotificationService {
 
   /// Schedule all reminders for a medicine
   Future<void> scheduleMedicineReminders(UserMedicine medicine) async {
-    if (medicine.id == null) return;
+    if (medicine.id == null || medicine.isExpired) return;
 
     for (int i = 0; i < medicine.scheduleTimes.length; i++) {
       final time = medicine.scheduleTimes[i];
@@ -199,6 +210,24 @@ class NotificationService {
         doseIndex: i,
       );
     }
+  }
+
+  /// Synchronize all notifications with the current cabinet.
+  /// Cancels all existing reminders and schedules fresh ones.
+  Future<void> syncWithCabinet(List<UserMedicine> medicines) async {
+    // 1. Cancel medicine-related reminders (keep alerts like expiry)
+    // Actually simpler to just cancel all and rebuild if it's the start
+    await cancelAll();
+
+    // 2. Re-schedule everything
+    for (final med in medicines) {
+      if (!med.isExpired && med.scheduleTimes.isNotEmpty) {
+        await scheduleMedicineReminders(med);
+      }
+    }
+
+    // 3. Reschedule daily health check
+    await scheduleDailyHealthCheck();
   }
 
   /// Cancel follow-up reminder when dose is logged
