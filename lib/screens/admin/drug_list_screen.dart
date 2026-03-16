@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/drug_model.dart';
 import '../../services/drug_service.dart';
+import '../../services/admin_analytics_service.dart';
 import 'add_edit_drug_screen.dart';
 import '../../theme/app_colors.dart';
 
@@ -93,7 +94,10 @@ class _DrugListScreenState extends State<DrugListScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete Drug', style: TextStyle(color: AppColors.lightText)),
+        title: Text(
+          'Delete Drug',
+          style: TextStyle(color: AppColors.lightText),
+        ),
         content: Text(
           'Are you sure you want to delete "${drug.genericName}"? This action cannot be undone.',
           style: TextStyle(color: AppColors.mutedText),
@@ -117,6 +121,11 @@ class _DrugListScreenState extends State<DrugListScreen> {
     if (confirmed == true && drug.id != null) {
       final success = await _drugService.deleteDrug(drug.id!);
       if (success) {
+        await AdminAnalyticsService().logAdminAction(
+          action: 'Deleted drug',
+          details: drug.displayName,
+          targetId: drug.id,
+        );
         _showSnackBar('Drug deleted successfully');
         _loadDrugs();
       } else {
@@ -149,7 +158,10 @@ class _DrugListScreenState extends State<DrugListScreen> {
         ),
         title: Text(
           'Drug Database',
-          style: TextStyle(color: AppColors.lightText, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: AppColors.lightText,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           IconButton(
@@ -164,7 +176,11 @@ class _DrugListScreenState extends State<DrugListScreen> {
           _buildCategoryFilter(),
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: AppColors.primaryTeal))
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryTeal,
+                    ),
+                  )
                 : _filteredDrugs.isEmpty
                 ? _buildEmptyState()
                 : _buildDrugList(),
@@ -193,7 +209,9 @@ class _DrugListScreenState extends State<DrugListScreen> {
         style: TextStyle(color: AppColors.lightText),
         decoration: InputDecoration(
           hintText: 'Search drugs by name...',
-          hintStyle: TextStyle(color: AppColors.mutedText.withValues(alpha: 0.5)),
+          hintStyle: TextStyle(
+            color: AppColors.mutedText.withValues(alpha: 0.5),
+          ),
           prefixIcon: Icon(Icons.search_rounded, color: AppColors.mutedText),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
@@ -246,7 +264,11 @@ class _DrugListScreenState extends State<DrugListScreen> {
                 color: isSelected ? AppColors.mintGreen : AppColors.mutedText,
                 fontSize: 12,
               ),
-              side: BorderSide(color: isSelected ? AppColors.primaryTeal : AppColors.borderColor),
+              side: BorderSide(
+                color: isSelected
+                    ? AppColors.primaryTeal
+                    : AppColors.borderColor,
+              ),
             ),
           );
         },
@@ -353,7 +375,10 @@ class _DrugListScreenState extends State<DrugListScreen> {
                         const SizedBox(height: 2),
                         Text(
                           drug.brandNames.take(3).join(', '),
-                          style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mutedText,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -389,7 +414,10 @@ class _DrugListScreenState extends State<DrugListScreen> {
                               size: 18,
                             ),
                             const SizedBox(width: 8),
-                            Text('Edit', style: TextStyle(color: AppColors.lightText)),
+                            Text(
+                              'Edit',
+                              style: TextStyle(color: AppColors.lightText),
+                            ),
                           ],
                         ),
                       ),
@@ -475,4 +503,3 @@ class _DrugListScreenState extends State<DrugListScreen> {
     );
   }
 }
-

@@ -1,8 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
+import '../services/telemetry_service.dart';
 import '../widgets/google_icon.dart';
 import '../theme/app_colors.dart';
+import 'guest_feature_screen.dart';
+import 'scan/scan_screen.dart';
+import 'interaction_checker_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -26,6 +30,8 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+    // Proactively initialize telemetry to track app installs/sessions
+    _initTelemetry();
 
     // Main entrance animation
     _mainController = AnimationController(
@@ -67,7 +73,25 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
 
+    _pulseController.forward();
     _mainController.forward();
+  }
+
+  Future<void> _initTelemetry() async {
+    try {
+      // Ensure guest has auth BEFORE telemetry writes to Firestore
+      if (_firebaseService.currentUser == null) {
+        try {
+          await _firebaseService.signInAnonymously();
+        } catch (e) {
+          debugPrint('Telemetry: Pre-auth failed: $e');
+        }
+      }
+      await TelemetryService().init();
+      debugPrint('Telemetry: Initialized successfully');
+    } catch (e) {
+      debugPrint('Telemetry: Failed to initialize: $e');
+    }
   }
 
   @override
@@ -83,10 +107,8 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       final result = await _firebaseService.signInWithGoogle();
       if (result != null && mounted) {
-        // Clear all routes and go to the root (AuthWrapper will decide where to go)
-        // We DON'T set _isLoading to false here so the loader stays until the transition
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-        return; // Skip the finally block's isLoading = false
+        return;
       } else if (result == null && mounted) {
         setState(() => _isLoading = false);
       }
@@ -107,6 +129,58 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
+  Future<void> _ensureGuestAuth() async {
+    if (_firebaseService.currentUser == null) {
+      setState(() => _isLoading = true);
+      try {
+        await _firebaseService.signInAnonymously();
+      } catch (e) {
+        debugPrint('Guest auth error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Guest mode activation failed: $e'),
+              backgroundColor: Colors.red.shade400,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _openGuestScan() async {
+    await _ensureGuestAuth();
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const GuestFeatureScreen(
+          title: 'Quick Scan',
+          icon: Icons.document_scanner_rounded,
+          child: ScanScreen(isGuestMode: true),
+        ),
+      ),
+    );
+  }
+
+  void _openGuestInteractionChecker() async {
+    await _ensureGuestAuth();
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const GuestFeatureScreen(
+          title: 'Interaction Checker',
+          icon: Icons.compare_arrows_rounded,
+          child: InteractionCheckerScreen(isGuestMode: true),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -120,164 +194,225 @@ class _SplashScreenState extends State<SplashScreen>
 
           // Main Content
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28.0),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 60),
 
-                  // Animated Logo
-                  _buildAnimatedLogo(),
-                  const SizedBox(height: 32),
+                    // Animated Logo
+                    _buildAnimatedLogo(),
+                    const SizedBox(height: 32),
 
-                  // Title with fade animation
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: Column(
-                        children: [
-                          ShaderMask(
-                            shaderCallback: (bounds) => const LinearGradient(
-                              colors: [AppColors.deepTeal, AppColors.primaryTeal],
-                            ).createShader(bounds),
-                            child: const Text(
-                              'PharmaClash',
+                    // Title with fade animation
+                    FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: Column(
+                          children: [
+                            ShaderMask(
+                              shaderCallback: (bounds) => const LinearGradient(
+                                colors: [AppColors.deepTeal, AppColors.primaryTeal],
+                              ).createShader(bounds),
+                              child: const Text(
+                                'PharmaClash',
+                                style: TextStyle(
+                                  fontSize: 40,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: -1.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Your intelligent medicine safety\ncompanion',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 40,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: -1.5,
+                                fontSize: 16,
+                                color: AppColors.grayText,
+                                height: 1.5,
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Your intelligent medicine safety\ncompanion',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: AppColors.grayText,
-                              height: 1.5,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  const Spacer(flex: 2),
+                    const SizedBox(height: 40),
 
-                  // Buttons
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: Column(
-                        children: [
-                          // Google Sign In Button with Glassmorphism
-                          _buildGlassButton(
-                            onPressed: _isLoading ? null : _handleGoogleSignIn,
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 22,
-                                    width: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: AppColors.darkText,
-                                    ),
-                                  )
-                                : const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      GoogleIcon(size: 22),
-                                      SizedBox(width: 14),
-                                      Text(
-                                        'Continue with Google',
-                                        style: TextStyle(
-                                          color: AppColors.darkText,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                    // Buttons
+                    FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: Column(
+                          children: [
+                            // Google Sign In Button with Glassmorphism
+                            _buildGlassButton(
+                              onPressed: _isLoading ? null : _handleGoogleSignIn,
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: AppColors.darkText,
                                       ),
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Divider
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  height: 1,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.grey.shade300,
+                                    )
+                                  : const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        GoogleIcon(size: 22),
+                                        SizedBox(width: 14),
+                                        Text(
+                                          'Continue with Google',
+                                          style: TextStyle(
+                                            color: AppColors.darkText,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ],
+                                    ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Divider
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.grey.shade300,
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Text(
-                                  'or',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontWeight: FontWeight.w500,
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
                                   ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Container(
-                                  height: 1,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.grey.shade300,
-                                        Colors.transparent,
-                                      ],
+                                  child: Text(
+                                    'or',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.grey.shade300,
+                                          Colors.transparent,
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
 
-                          // Login & Register Buttons
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildOutlinedButton(
-                                  label: 'Login',
-                                  onPressed: () =>
-                                      Navigator.pushNamed(context, '/login'),
+                            // Login & Register Buttons
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildOutlinedButton(
+                                    label: 'Login',
+                                    onPressed: () =>
+                                        Navigator.pushNamed(context, '/login'),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildGradientButton(
-                                  label: 'Register',
-                                  onPressed: () =>
-                                      Navigator.pushNamed(context, '/register'),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _buildGradientButton(
+                                    label: 'Register',
+                                    onPressed: () =>
+                                        Navigator.pushNamed(context, '/register'),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+
+                            // ── Try without account section ──
+                            const SizedBox(height: 32),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    color: Colors.grey.shade200,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'Try without an account',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    color: Colors.grey.shade200,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Guest Feature Cards
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildGuestFeatureCard(
+                                    icon: Icons.document_scanner_rounded,
+                                    title: 'Quick Scan',
+                                    subtitle: 'Scan a strip instantly',
+                                    color: AppColors.primaryTeal,
+                                    onTap: _openGuestScan,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildGuestFeatureCard(
+                                    icon: Icons.compare_arrows_rounded,
+                                    title: 'Drug Clash',
+                                    subtitle: 'Check interactions',
+                                    color: Colors.orange.shade700,
+                                    onTap: _openGuestInteractionChecker,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 40),
-                ],
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
           ),
@@ -600,6 +735,71 @@ class _SplashScreenState extends State<SplashScreen>
                 fontWeight: FontWeight.w700,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuestFeatureCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: color.withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkText,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.grayText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       ),

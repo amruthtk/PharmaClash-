@@ -1,5 +1,50 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Represents a single strip/batch of medicine with its own expiry and quantity.
+class StripBatch {
+  final DateTime expiryDate;
+  int quantity;
+  final DateTime addedAt;
+
+  StripBatch({
+    required this.expiryDate,
+    required this.quantity,
+    DateTime? addedAt,
+  }) : addedAt = addedAt ?? DateTime.now();
+
+  bool get isExpired => expiryDate.isBefore(DateTime.now());
+
+  bool get isExpiringSoon =>
+      !isExpired && expiryDate.difference(DateTime.now()).inDays <= 30;
+
+  int get daysUntilExpiry => expiryDate.difference(DateTime.now()).inDays;
+
+  String get formattedExpiry {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${months[expiryDate.month - 1]} ${expiryDate.year}';
+  }
+
+  Map<String, dynamic> toMap() => {
+    'expiryDate': Timestamp.fromDate(expiryDate),
+    'quantity': quantity,
+    'addedAt': Timestamp.fromDate(addedAt),
+  };
+
+  factory StripBatch.fromMap(Map<String, dynamic> map) => StripBatch(
+    expiryDate: (map['expiryDate'] as Timestamp).toDate(),
+    quantity: map['quantity'] ?? 0,
+    addedAt: (map['addedAt'] as Timestamp?)?.toDate(),
+  );
+
+  StripBatch copyWith({DateTime? expiryDate, int? quantity, DateTime? addedAt}) {
+    return StripBatch(
+      expiryDate: expiryDate ?? this.expiryDate,
+      quantity: quantity ?? this.quantity,
+      addedAt: addedAt ?? this.addedAt,
+    );
+  }
+}
+
 /// Represents a medicine in the user's personal cabinet with expiry tracking
 class UserMedicine {
   final String? id;
@@ -10,15 +55,24 @@ class UserMedicine {
   final int tabletCount; // Current stock quantity
   final DateTime addedAt;
   final DateTime? updatedAt;
-  final bool expiryAlertShown; // Track if first-time modal was shown
+  final bool expiryAlertShown; // Track if expired modal was shown
+  final bool lowStockAlertShown; // Track if low stock alert was dismissed
+  final bool
+  expiringSoonAlertShown; // Track if expiring soon alert was dismissed
+  final bool safetyAcknowledged; // True after user acks pre-dose warnings once
 
   // Dose scheduling fields
   final int dosesPerDay; // 1, 2, 3, or 4 times per day
   final List<String> scheduleTimes; // e.g., ["08:00", "20:00"]
+  final int
+  doseIntervalDays; // 0 = daily, 1 = every other day, 2 = every 3rd day
 
   // Food/dietary warnings for pre-dose confirmation
   final List<String>
   foodWarnings; // e.g., ["Avoid alcohol", "Take 2hrs from dairy"]
+
+  // Multi-strip batch tracking
+  final List<StripBatch> strips;
 
   UserMedicine({
     this.id,
@@ -30,9 +84,14 @@ class UserMedicine {
     DateTime? addedAt,
     this.updatedAt,
     this.expiryAlertShown = false,
+    this.lowStockAlertShown = false,
+    this.expiringSoonAlertShown = false,
+    this.safetyAcknowledged = false,
     this.dosesPerDay = 1,
     this.scheduleTimes = const [],
+    this.doseIntervalDays = 0,
     this.foodWarnings = const [],
+    this.strips = const [],
   }) : addedAt = addedAt ?? DateTime.now();
 
   // ==================== Expiry Status Computed Properties ====================
@@ -95,13 +154,40 @@ class UserMedicine {
       'addedAt': Timestamp.fromDate(addedAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'expiryAlertShown': expiryAlertShown,
+      'lowStockAlertShown': lowStockAlertShown,
+      'expiringSoonAlertShown': expiringSoonAlertShown,
+      'safetyAcknowledged': safetyAcknowledged,
       'dosesPerDay': dosesPerDay,
       'scheduleTimes': scheduleTimes,
+      'doseIntervalDays': doseIntervalDays,
       'foodWarnings': foodWarnings,
+      'strips': strips.map((s) => s.toMap()).toList(),
     };
   }
 
   factory UserMedicine.fromMap(Map<String, dynamic> map, String id) {
+    // Parse strips array — migrate legacy data if needed
+    List<StripBatch> strips = [];
+    final rawStrips = map['strips'] as List<dynamic>?;
+    if (rawStrips != null && rawStrips.isNotEmpty) {
+      strips = rawStrips
+          .map((s) => StripBatch.fromMap(Map<String, dynamic>.from(s)))
+          .toList();
+    } else {
+      // Legacy migration: create a single strip from old fields
+      final legacyExpiry = (map['expiryDate'] as Timestamp?)?.toDate();
+      final legacyCount = map['tabletCount'] ?? 0;
+      if (legacyExpiry != null && legacyCount > 0) {
+        strips = [
+          StripBatch(
+            expiryDate: legacyExpiry,
+            quantity: legacyCount,
+            addedAt: (map['addedAt'] as Timestamp?)?.toDate(),
+          ),
+        ];
+      }
+    }
+
     return UserMedicine(
       id: id,
       drugId: map['drugId'] ?? '',
@@ -112,9 +198,14 @@ class UserMedicine {
       addedAt: (map['addedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
       expiryAlertShown: map['expiryAlertShown'] ?? false,
+      lowStockAlertShown: map['lowStockAlertShown'] ?? false,
+      expiringSoonAlertShown: map['expiringSoonAlertShown'] ?? false,
+      safetyAcknowledged: map['safetyAcknowledged'] ?? false,
       dosesPerDay: map['dosesPerDay'] ?? 1,
       scheduleTimes: List<String>.from(map['scheduleTimes'] ?? []),
+      doseIntervalDays: map['doseIntervalDays'] ?? 0,
       foodWarnings: List<String>.from(map['foodWarnings'] ?? []),
+      strips: strips,
     );
   }
 
@@ -130,9 +221,14 @@ class UserMedicine {
     DateTime? addedAt,
     DateTime? updatedAt,
     bool? expiryAlertShown,
+    bool? lowStockAlertShown,
+    bool? expiringSoonAlertShown,
+    bool? safetyAcknowledged,
     int? dosesPerDay,
     List<String>? scheduleTimes,
+    int? doseIntervalDays,
     List<String>? foodWarnings,
+    List<StripBatch>? strips,
   }) {
     return UserMedicine(
       id: id ?? this.id,
@@ -144,9 +240,15 @@ class UserMedicine {
       addedAt: addedAt ?? this.addedAt,
       updatedAt: updatedAt ?? this.updatedAt,
       expiryAlertShown: expiryAlertShown ?? this.expiryAlertShown,
+      lowStockAlertShown: lowStockAlertShown ?? this.lowStockAlertShown,
+      expiringSoonAlertShown:
+          expiringSoonAlertShown ?? this.expiringSoonAlertShown,
+      safetyAcknowledged: safetyAcknowledged ?? this.safetyAcknowledged,
       dosesPerDay: dosesPerDay ?? this.dosesPerDay,
       scheduleTimes: scheduleTimes ?? this.scheduleTimes,
+      doseIntervalDays: doseIntervalDays ?? this.doseIntervalDays,
       foodWarnings: foodWarnings ?? this.foodWarnings,
+      strips: strips ?? this.strips,
     );
   }
 

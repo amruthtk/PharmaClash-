@@ -1,9 +1,17 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/medical_reference_data.dart';
 import '../theme/app_colors.dart';
 import '../services/firebase_service.dart';
+import '../widgets/medical/medical_section_card.dart';
+import '../widgets/medical/medical_autocomplete_field.dart';
+import '../widgets/medical/medical_progress_indicator.dart';
+import '../widgets/medical/medical_background.dart';
+import '../widgets/medical/medical_chip.dart';
+import '../widgets/medical/medical_app_bar.dart';
+import '../widgets/medical/medical_bottom_buttons.dart';
+import '../widgets/medical/medical_condition_tile.dart';
+import '../widgets/medical/medical_security_notice.dart';
+import '../widgets/medical/medical_input_field.dart';
 
 class MedicalInfoScreen extends StatefulWidget {
   const MedicalInfoScreen({super.key});
@@ -17,7 +25,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
   final _allergyController = TextEditingController();
   final _conditionController = TextEditingController();
   final _caregiverNameController = TextEditingController();
-  final _caregiverPhoneController = TextEditingController();
+  final _caregiverEmailController = TextEditingController();
   final _allergyFocusNode = FocusNode();
   final _conditionFocusNode = FocusNode();
 
@@ -27,7 +35,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
   final List<String> _selectedAllergies = [];
   final List<String> _selectedConditions = [];
 
-  // Quick-select chronic diseases (subset of Reference Data)
+  // Quick-select health conditions (subset of Reference Data)
   final Map<String, bool> _quickSelectDiseases = {
     'Hypertension': false,
     'Asthma': false,
@@ -89,7 +97,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
     _allergyController.dispose();
     _conditionController.dispose();
     _caregiverNameController.dispose();
-    _caregiverPhoneController.dispose();
+    _caregiverEmailController.dispose();
     _allergyFocusNode.dispose();
     _conditionFocusNode.dispose();
     _animationController.dispose();
@@ -150,13 +158,10 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
   }
 
   Future<void> _handleSave() async {
-    final phone = _caregiverPhoneController.text.trim();
-
-    if (phone.isNotEmpty && phone.length != 10) {
-      _showSnackBar(
-        'Please enter a valid 10-digit phone number',
-        isError: true,
-      );
+    final caregiverEmail = _caregiverEmailController.text.trim();
+    if (caregiverEmail.isNotEmpty &&
+        !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(caregiverEmail)) {
+      _showSnackBar('Please enter a valid email address', isError: true);
       return;
     }
 
@@ -169,9 +174,9 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
           uid: user.uid,
           medicalData: {
             'allergies': _selectedAllergies,
-            'chronicConditions': _getAllSelectedConditions(),
+            'healthConditions': _getAllSelectedConditions(),
             'caregiverName': _caregiverNameController.text.trim(),
-            'caregiverPhone': phone,
+            'caregiverEmail': caregiverEmail,
             'profileCompleted': true,
           },
         );
@@ -190,10 +195,6 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  void _handleSkip() {
-    Navigator.pushReplacementNamed(context, '/dashboard');
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -222,16 +223,18 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
       backgroundColor: AppColors.inputBg,
       body: Stack(
         children: [
-          // Animated background
-          _buildBackgroundDecorations(),
-
-          // Main content
+          MedicalBackground(floatAnimation: _floatController),
           Column(
             children: [
-              // Premium App Bar
-              _buildAppBar(),
-
-              // Scrollable content
+              MedicalAppBar(
+                onBack: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    Navigator.pushReplacementNamed(context, '/register');
+                  }
+                },
+              ),
               Expanded(
                 child: FadeTransition(
                   opacity: _fadeAnimation,
@@ -243,12 +246,10 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Progress indicator
-                          _buildProgressIndicator(),
+                          const MedicalProgressIndicator(),
                           const SizedBox(height: 24),
 
-                          // Allergies Section
-                          _buildSectionCard(
+                          MedicalSectionCard(
                             icon: Icons.warning_amber_rounded,
                             iconColor: Colors.orange,
                             title: 'Drug Allergies',
@@ -258,29 +259,25 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
                           ),
                           const SizedBox(height: 20),
 
-                          // Chronic Diseases Section
-                          _buildSectionCard(
+                          MedicalSectionCard(
                             icon: Icons.medical_services_outlined,
                             iconColor: AppColors.primaryTeal,
-                            title: 'Chronic Conditions',
+                            title: 'Health Conditions',
                             subtitle: 'Select any conditions that apply to you',
-                            child: _buildChronicDiseasesSection(),
+                            child: _buildHealthConditionsSection(),
                           ),
                           const SizedBox(height: 20),
 
-                          // Emergency Contact Section
-                          _buildSectionCard(
+                          MedicalSectionCard(
                             icon: Icons.contact_phone_outlined,
                             iconColor: Colors.blue,
                             title: 'Caregiver Contact',
-                            subtitle:
-                                'Emergency contact for medication reminders',
+                            subtitle: 'Emergency contact for email alerts',
                             child: _buildCaregiverSection(),
                           ),
                           const SizedBox(height: 20),
 
-                          // Security Notice
-                          _buildSecurityNotice(),
+                          const MedicalSecurityNotice(),
                           const SizedBox(height: 100),
                         ],
                       ),
@@ -290,254 +287,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
               ),
             ],
           ),
-
-          // Bottom Buttons
-          _buildBottomButtons(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBackgroundDecorations() {
-    return AnimatedBuilder(
-      animation: _floatController,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            Positioned(
-              top: -60 + (math.sin(_floatController.value * math.pi) * 10),
-              right: -80,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppColors.lightMint.withValues(alpha: 0.4),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 150 + (math.cos(_floatController.value * math.pi) * 15),
-              left: -100,
-              child: Container(
-                width: 250,
-                height: 250,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppColors.mintGreen.withValues(alpha: 0.12),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildAppBar() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        MediaQuery.of(context).padding.top + 16,
-        20,
-        16,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.lightBorderColor),
-            ),
-            child: IconButton(
-              onPressed: () {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                } else {
-                  Navigator.pushReplacementNamed(context, '/register');
-                }
-              },
-              icon: const Icon(
-                Icons.arrow_back_ios_new,
-                color: AppColors.darkText,
-                size: 18,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: [AppColors.deepTeal, AppColors.primaryTeal],
-                ).createShader(bounds),
-                child: const Text(
-                  'Medical Information',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 48), // Balance the back button
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressIndicator() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primaryTeal.withValues(alpha: 0.1),
-            AppColors.mintGreen.withValues(alpha: 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primaryTeal.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.primaryTeal.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.health_and_safety_rounded,
-              color: AppColors.primaryTeal,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Step 2 of 2',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.grayText,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Complete your health profile',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: AppColors.darkText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: const LinearProgressIndicator(
-                    value: 1.0,
-                    backgroundColor: AppColors.lightBorderColor,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryTeal),
-                    minHeight: 6,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.lightCardBg,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      iconColor.withValues(alpha: 0.15),
-                      iconColor.withValues(alpha: 0.05),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: iconColor, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.darkText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(fontSize: 13, color: AppColors.grayText),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          child,
+          MedicalBottomButtons(onSave: _handleSave, isLoading: _isLoading),
         ],
       ),
     );
@@ -548,7 +298,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Autocomplete search field
-        _buildAutocompleteField(
+        MedicalAutocompleteField(
           controller: _allergyController,
           focusNode: _allergyFocusNode,
           hint: 'Search drug allergies...',
@@ -567,7 +317,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             spacing: 8,
             runSpacing: 8,
             children: _selectedAllergies.map((allergy) {
-              return _buildChip(
+              return MedicalChip(
                 label: allergy,
                 color: Colors.red,
                 onRemove: () => _removeAllergy(allergy),
@@ -602,16 +352,17 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
     );
   }
 
-  Widget _buildChronicDiseasesSection() {
+  Widget _buildHealthConditionsSection() {
     return Column(
       children: [
         // Quick-select common conditions
         ...(_quickSelectDiseases.keys.map((disease) {
-          return _buildConditionTile(
-            disease,
-            _getConditionSubtitle(disease),
-            _quickSelectDiseases[disease]!,
-            (v) => setState(() => _quickSelectDiseases[disease] = v ?? false),
+          return MedicalConditionTile(
+            title: disease,
+            subtitle: _getConditionSubtitle(disease),
+            isSelected: _quickSelectDiseases[disease]!,
+            onChanged: (v) =>
+                setState(() => _quickSelectDiseases[disease] = v ?? false),
           );
         })),
 
@@ -630,13 +381,13 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
         ),
         const SizedBox(height: 12),
 
-        _buildAutocompleteField(
+        MedicalAutocompleteField(
           controller: _conditionController,
           focusNode: _conditionFocusNode,
           hint: 'Search conditions...',
           showSuggestions: _showConditionSuggestions,
           getSuggestions: () =>
-              MedicalReferenceData.searchChronicDiseases(
+              MedicalReferenceData.searchHealthConditions(
                     _conditionController.text,
                   )
                   .where(
@@ -656,7 +407,7 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
             spacing: 8,
             runSpacing: 8,
             children: _selectedConditions.map((condition) {
-              return _buildChip(
+              return MedicalChip(
                 label: condition,
                 color: AppColors.primaryTeal,
                 onRemove: () => _removeCondition(condition),
@@ -687,477 +438,22 @@ class _MedicalInfoScreenState extends State<MedicalInfoScreen>
     }
   }
 
-  Widget _buildAutocompleteField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required String hint,
-    required bool showSuggestions,
-    required List<String> Function() getSuggestions,
-    required Function(String) onSelected,
-    required VoidCallback onDismiss,
-  }) {
-    final suggestions = getSuggestions();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: controller,
-          focusNode: focusNode,
-          style: const TextStyle(fontSize: 15, color: AppColors.darkText),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: AppColors.grayText.withValues(alpha: 0.6)),
-            prefixIcon: const Icon(Icons.search, color: AppColors.grayText, size: 20),
-            suffixIcon: controller.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: () {
-                      controller.clear();
-                      onDismiss();
-                    },
-                  )
-                : null,
-            filled: true,
-            fillColor: AppColors.inputBg,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.lightBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.lightBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-          ),
-        ),
-
-        // Suggestions dropdown
-        if (showSuggestions && suggestions.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            constraints: const BoxConstraints(maxHeight: 200),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.lightBorderColor),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: suggestions.length,
-              itemBuilder: (context, index) {
-                final suggestion = suggestions[index];
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => onSelected(suggestion),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.add_circle_outline,
-                            size: 18,
-                            color: AppColors.primaryTeal,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              suggestion,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.darkText,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-        // No results message
-        if (showSuggestions &&
-            suggestions.isEmpty &&
-            controller.text.length > 1)
-          Container(
-            margin: const EdgeInsets.only(top: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  size: 18,
-                  color: Colors.amber.shade700,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'No matching items found. Please select from the verified list.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.amber.shade800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildConditionTile(
-    String title,
-    String subtitle,
-    bool value,
-    Function(bool?) onChanged,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: value ? AppColors.primaryTeal.withValues(alpha: 0.08) : AppColors.inputBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: value ? AppColors.primaryTeal.withValues(alpha: 0.3) : AppColors.lightBorderColor,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: value ? AppColors.primaryTeal : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: value ? AppColors.primaryTeal : AppColors.lightBorderColor,
-                    width: 2,
-                  ),
-                ),
-                child: value
-                    ? const Icon(Icons.check, color: Colors.white, size: 16)
-                    : null,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: value ? AppColors.darkText : AppColors.grayText,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty)
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: value
-                              ? AppColors.grayText
-                              : AppColors.grayText.withValues(alpha: 0.7),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCaregiverSection() {
     return Column(
       children: [
-        _buildInputField(
+        MedicalInputField(
           controller: _caregiverNameController,
           hint: 'Caregiver name (optional)',
           prefixIcon: Icons.person_outline,
         ),
         const SizedBox(height: 14),
-        _buildInputField(
-          controller: _caregiverPhoneController,
-          hint: '10-digit phone number (optional)',
-          prefixIcon: Icons.phone_outlined,
-          keyboardType: TextInputType.phone,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(10),
-          ],
+        MedicalInputField(
+          controller: _caregiverEmailController,
+          hint: 'Caregiver Gmail / Email (optional)',
+          prefixIcon: Icons.email_outlined,
+          keyboardType: TextInputType.emailAddress,
         ),
       ],
     );
   }
-
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String hint,
-    IconData? prefixIcon,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      style: const TextStyle(fontSize: 15, color: AppColors.darkText),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(color: AppColors.grayText.withValues(alpha: 0.6)),
-        prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: AppColors.grayText, size: 20)
-            : null,
-        filled: true,
-        fillColor: AppColors.inputBg,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.lightBorderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.lightBorderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChip({
-    required String label,
-    required Color color,
-    required VoidCallback onRemove,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: _darkenColor(color),
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onRemove,
-            child: Icon(Icons.close, size: 16, color: _darkenColor(color)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _darkenColor(Color color) {
-    final hsl = HSLColor.fromColor(color);
-    return hsl.withLightness((hsl.lightness - 0.2).clamp(0.0, 1.0)).toColor();
-  }
-
-  Widget _buildSecurityNotice() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.blue.shade50,
-            Colors.blue.shade50.withValues(alpha: 0.5),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue.shade100),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.shield_outlined,
-              color: Colors.blue.shade700,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'Your medical information is encrypted and stored securely.',
-              style: TextStyle(
-                color: Colors.blue.shade700,
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomButtons() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 15,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              Expanded(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _isLoading ? null : _handleSkip,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.lightBorderColor),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Skip for now',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.grayText,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _isLoading ? null : _handleSave,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primaryTeal, AppColors.deepTeal],
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryTeal.withValues(alpha: 0.35),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_isLoading)
-                            const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          else ...[
-                            const Text(
-                              'Save & Continue',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.arrow_forward_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
-
-
-

@@ -40,7 +40,7 @@ class PdfReportService {
             allergies.isEmpty ? 'None reported' : allergies.join(', '),
           ),
           _buildTextItem(
-            'Chronic Conditions',
+            'Health Conditions',
             conditions.isEmpty ? 'None reported' : conditions.join(', '),
           ),
           pw.SizedBox(height: 20),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'auto_email_service.dart';
 import 'firebase_service.dart';
 
 /// Service for handling emergency caregiver notifications
@@ -38,7 +39,7 @@ class EmergencyService {
     return info != null && info['email']!.isNotEmpty;
   }
 
-  /// Send Email alert to caregiver
+  /// Send Email alert to caregiver **AUTOMATICALLY**
   Future<bool> sendEmailAlert({
     String? email,
     String? patientName,
@@ -47,6 +48,7 @@ class EmergencyService {
   }) async {
     try {
       String? targetEmail = email;
+      String targetName = 'Caregiver';
 
       if (targetEmail == null) {
         final caregiverInfo = await getCaregiverInfo();
@@ -55,7 +57,10 @@ class EmergencyService {
           return false;
         }
         targetEmail = caregiverInfo['email'];
+        targetName = caregiverInfo['name'] ?? 'Caregiver';
       }
+
+      if (targetEmail == null) return false;
 
       final String mailSubject =
           subject ??
@@ -64,22 +69,15 @@ class EmergencyService {
           body ??
           'Hello, this is an automated alert from PharmaClash regarding medication interaction risks.';
 
-      final emailUri = Uri(
-        scheme: 'mailto',
-        path: targetEmail,
-        query:
-            'subject=${Uri.encodeComponent(mailSubject)}&body=${Uri.encodeComponent(mailBody)}',
+      // ✅ Use AutoEmailService for silent background dispatch
+      return await AutoEmailService().sendAutomaticEmail(
+        toEmail: targetEmail,
+        toName: targetName,
+        subject: mailSubject,
+        messageBody: mailBody,
       );
-
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
-        return true;
-      } else {
-        debugPrint('Could not launch Email');
-        return false;
-      }
     } catch (e) {
-      debugPrint('Error sending Email: $e');
+      debugPrint('Error sending automatic Email: $e');
       return false;
     }
   }
@@ -326,13 +324,27 @@ class _EmergencyOptionsSheet extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _ActionButton(
-                      icon: Icons.email_rounded,
-                      label: 'Email Caregiver',
-                      color: Colors.teal.shade600,
+                      icon: Icons.auto_awesome_rounded,
+                      label: 'Send Auto-Alert',
+                      color: Colors.teal.shade700,
                       onTap: () async {
                         if (onSendEmail != null) {
-                          await onSendEmail!();
-                          if (context.mounted) Navigator.pop(context);
+                          // Show loading indicator or just close
+                          final success = await onSendEmail!();
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  success
+                                      ? '✅ Emergency alert sent to $caregiverName'
+                                      : '❌ Failed to send alert',
+                                ),
+                                backgroundColor:
+                                    success ? Colors.teal : Colors.red,
+                              ),
+                            );
+                          }
                         }
                       },
                     ),

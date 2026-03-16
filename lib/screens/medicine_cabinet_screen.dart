@@ -7,6 +7,9 @@ import '../theme/app_colors.dart';
 import '../widgets/expiry_alert_modal.dart';
 import '../widgets/new_strip_form.dart';
 import '../widgets/take_dose_sheet.dart';
+import '../widgets/medicine_edit_sheet.dart';
+import 'drug_details_screen.dart';
+import '../services/drug_service.dart';
 
 /// Filter options for medicine cabinet
 enum CabinetFilter { all, expiringSoon, expired }
@@ -23,10 +26,12 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
   final FirebaseService _firebaseService = FirebaseService();
   final MedicineInventoryService _inventoryService = MedicineInventoryService();
   final ExpiryAlertService _expiryService = ExpiryAlertService();
+  final DrugService _drugService = DrugService();
 
   List<UserMedicine> _medicines = [];
   bool _isLoading = true;
   CabinetFilter _currentFilter = CabinetFilter.all;
+  final Set<String> _expandedIds = {};
 
   @override
   void initState() {
@@ -81,16 +86,26 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
     );
   }
 
-  Future<void> _removeMedicine(UserMedicine medicine) async {
+  /// New method to handle clearing expired batches specifically
+  Future<void> _clearExpiredStrips(UserMedicine medicine) async {
     final user = _firebaseService.currentUser;
-    if (user != null && medicine.id != null) {
+    if (user == null || medicine.id == null) return;
+
+    // Check if there are any valid strips remaining
+    final hasValidStrips = medicine.strips.any((s) => !s.isExpired);
+
+    if (hasValidStrips) {
+      // Only clear the expired parts
       try {
-        await _inventoryService.removeMedicine(user.uid, medicine.id!);
-        _showSnackBar('${medicine.medicineName} removed from cabinet');
+        await _inventoryService.clearExpiredBatches(user.uid, medicine.id!);
+        _showSnackBar('Expired batches removed. Valid stock preserved.');
         _loadMedicines();
       } catch (e) {
-        _showSnackBar('Failed to remove: $e', isError: true);
+        _showSnackBar('Failed to clear expired batches: $e', isError: true);
       }
+    } else {
+      // Everything is expired — confirm full removal
+      _confirmRemoveMedicine(medicine);
     }
   }
 
@@ -118,11 +133,72 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
     );
   }
 
+  Future<void> _editMedicine(UserMedicine medicine) async {
+    await MedicineEditSheet.show(
+      context,
+      medicine: medicine,
+      onSave: (updatedMedicine) async {
+        final user = _firebaseService.currentUser;
+        if (user != null) {
+          try {
+            await _inventoryService.updateMedicine(user.uid, updatedMedicine);
+            _showSnackBar('Settings updated successfully!');
+            _loadMedicines();
+          } catch (e) {
+            _showSnackBar('Failed to update: $e', isError: true);
+          }
+        }
+      },
+    );
+  }
+
+  /// Show confirmation dialog before removing a specific strip
+  Future<void> _confirmRemoveStrip(UserMedicine medicine, int stripIndex) async {
+    final strip = medicine.strips[stripIndex];
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Remove this Strip?'),
+        content: Text(
+          'Do you want to remove the batch with ${strip.quantity} tablets expiring in ${strip.formattedExpiry}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove Strip'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final user = _firebaseService.currentUser;
+      if (user != null && medicine.id != null) {
+        try {
+          await _inventoryService.removeStrip(user.uid, medicine.id!, stripIndex);
+          _showSnackBar('Strip removed successfully');
+          _loadMedicines();
+        } catch (e) {
+          _showSnackBar('Failed to remove strip: $e', isError: true);
+        }
+      }
+    }
+  }
+
   void _showExpiryAlert(UserMedicine medicine) {
     ExpiryAlertModal.show(
       context,
       medicine: medicine,
-      onRemove: () => _removeMedicine(medicine),
+      onRemove: () => _clearExpiredStrips(medicine),
       onNewStrip: () => _showNewStripForm(medicine),
       onDismiss: () async {
         // Mark alert as shown
@@ -204,6 +280,26 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
         }
       },
     );
+  }
+
+  /// Navigate to drug details screen
+  Future<void> _viewDrugDetails(UserMedicine medicine) async {
+    try {
+      // Find the corresponding DrugModel to get ingredient/restriction data
+      final drug = await _drugService.getDrugByName(medicine.medicineName);
+      if (drug != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DrugDetailsScreen(drug: drug),
+          ),
+        );
+      } else {
+        _showSnackBar('No detailed safety profile found for this medicine.');
+      }
+    } catch (e) {
+      _showSnackBar('Error loading details: $e', isError: true);
+    }
   }
 
   @override
@@ -396,7 +492,13 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
     }
 
     return GestureDetector(
-      onTap: medicine.isExpired ? () => _showExpiryAlert(medicine) : null,
+      onTap: () {
+        if (medicine.isExpired) {
+          _showExpiryAlert(medicine);
+        } else {
+          _viewDrugDetails(medicine);
+        }
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -458,38 +560,196 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
                   ),
                 ),
 
-                // Expiry badge
-                _buildExpiryBadge(medicine, alert),
+                // Expiry badge & Expansion toggle
+                Row(
+                  children: [
+                    _buildExpiryBadge(medicine, alert),
+                    if (medicine.id != null) ...[
+                      const SizedBox(width: 8),
+                      // Prominent expansion toggle
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            final id = medicine.id!;
+                            if (_expandedIds.contains(id)) {
+                              _expandedIds.remove(id);
+                              if (medicine.strips.length > 1) {
+                                _expandedIds.add('${id}_collapsed');
+                              }
+                            } else if (_expandedIds.contains('${id}_collapsed')) {
+                              _expandedIds.remove('${id}_collapsed');
+                            } else {
+                              _expandedIds.add(id);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: AppColors.inputBg,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.lightBorderColor),
+                          ),
+                          child: Icon(
+                            (_expandedIds.contains(medicine.id) || (medicine.strips.length > 1 && !_expandedIds.contains('${medicine.id}_collapsed')))
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            color: AppColors.darkText, // Darker color for visibility
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 14),
 
-            // Stats row
-            Row(
-              children: [
-                // Expiry date
-                _buildStatItem(
-                  icon: Icons.calendar_month_rounded,
-                  label: 'Expires',
-                  value: medicine.formattedExpiryDate,
-                  color: medicine.isExpired
-                      ? Colors.red
-                      : medicine.isExpiringSoon
-                      ? Colors.orange
-                      : AppColors.grayText,
+            // Stats row — strip-by-strip breakdown
+            if (_expandedIds.contains(medicine.id) || (medicine.strips.length > 1 && !_expandedIds.contains('${medicine.id}_collapsed'))) ...[
+              // Multi-strip breakdown
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.inputBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.lightBorderColor),
                 ),
-                const SizedBox(width: 20),
-                // Tablet count
-                _buildStatItem(
-                  icon: Icons.medication_rounded,
-                  label: 'Stock',
-                  value: '${medicine.tabletCount} tablets',
-                  color: medicine.isLowStock
-                      ? Colors.orange
-                      : AppColors.grayText,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.inventory_2_rounded, size: 14, color: AppColors.grayText),
+                        const SizedBox(width: 6),
+                        Text(
+                          medicine.strips.length > 1 
+                            ? '${medicine.strips.length} Strips  •  ${medicine.tabletCount} total'
+                            : 'Inventory Breakdown',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.darkText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...medicine.strips.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final strip = entry.value;
+                      Color stripColor = AppColors.accentGreen;
+                      if (strip.isExpired) {
+                        stripColor = Colors.red;
+                      } else if (strip.isExpiringSoon) {
+                        stripColor = Colors.orange;
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: stripColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '${strip.quantity} tabs',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.darkText,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '→ ${strip.formattedExpiry}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: stripColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  if (strip.isExpired)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Text(
+                                        '(Expired)',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.red.shade600,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  if (strip.isExpiringSoon)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Text(
+                                        '(${strip.daysUntilExpiry}d)',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.orange.shade700,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            // Small delete button for this strip
+                            GestureDetector(
+                              onTap: () => _confirmRemoveStrip(medicine, index),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 14,
+                                  color: Colors.red.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ] else ...[
+              // Single strip or legacy — show simple stats
+              Row(
+                children: [
+                  _buildStatItem(
+                    icon: Icons.calendar_month_rounded,
+                    label: 'Expires',
+                    value: medicine.formattedExpiryDate,
+                    color: medicine.isExpired
+                        ? Colors.red
+                        : medicine.isExpiringSoon
+                        ? Colors.orange
+                        : AppColors.grayText,
+                  ),
+                  const SizedBox(width: 20),
+                  _buildStatItem(
+                    icon: Icons.medication_rounded,
+                    label: 'Stock',
+                    value: '${medicine.tabletCount} tablets',
+                    color: medicine.isLowStock
+                        ? Colors.orange
+                        : AppColors.grayText,
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
 
             // Action buttons
@@ -514,6 +774,13 @@ class _MedicineCabinetScreenState extends State<MedicineCabinetScreen> {
                     color: AppColors.primaryTeal,
                     onTap: () => _showNewStripForm(medicine),
                   ),
+                ),
+                const SizedBox(width: 10),
+                // Edit settings button
+                _buildSmallIconButton(
+                  icon: Icons.tune_rounded,
+                  color: AppColors.grayText,
+                  onTap: () => _editMedicine(medicine),
                 ),
                 const SizedBox(width: 10),
                 // Remove button (always available)

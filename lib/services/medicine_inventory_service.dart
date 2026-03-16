@@ -67,28 +67,82 @@ class MedicineInventoryService {
   }
 
   /// Add a DrugModel to cabinet (from scanning flow)
+  /// If the same drug already exists (matched by drugId), merges:
+  ///   - tabletCount is added to existing count
+  ///   - expiryDate keeps the later (fresher) date
+  ///   - schedule/interval/warnings are updated to the new values
   Future<String> addDrugToCabinet(
     String uid,
     DrugModel drug, {
     int? tabletCount,
     List<String>? scheduleTimes,
     DateTime? expiryDate,
+    int doseIntervalDays = 0,
   }) async {
     try {
+      final drugId = drug.id ?? '';
+      final newCount = tabletCount ?? 10;
+      final newSchedule = scheduleTimes ?? [];
+      final newFoodWarnings = drug.hasDietaryWarning
+          ? drug.foodInteractions
+                .map((f) => "[${f.severity}] ${f.food}: ${f.description}")
+                .toList()
+          : <String>[];
+
+      // Check if this drug already exists in the cabinet
+      final existing = drugId.isNotEmpty
+          ? await findMedicineByDrugId(uid, drugId)
+          : null;
+
+      if (existing != null && existing.id != null) {
+        // --- Merge into existing entry using strip logic ---
+        // We reuse updateStrip to ensure strips are correctly handled
+        await updateStrip(
+          uid,
+          existing.id!,
+          newExpiryDate: expiryDate ?? existing.expiryDate ?? DateTime.now().add(const Duration(days: 365)),
+          addQuantity: newCount,
+        );
+
+        // Fetch again to get updated object for notifications/other updates
+        final updatedDoc = await _medicinesCollection(uid).doc(existing.id).get();
+        final updated = UserMedicine.fromMap(updatedDoc.data()!, existing.id!);
+        
+        // Update schedule/warnings if they were provided new in this scan
+        if (newSchedule.isNotEmpty || doseIntervalDays != existing.doseIntervalDays) {
+           await _medicinesCollection(uid).doc(existing.id).update({
+             'scheduleTimes': newSchedule.isNotEmpty ? newSchedule : existing.scheduleTimes,
+             'doseIntervalDays': doseIntervalDays,
+             'foodWarnings': newFoodWarnings.isNotEmpty ? newFoodWarnings : existing.foodWarnings,
+             'updatedAt': FieldValue.serverTimestamp(),
+           });
+        }
+
+        // Reschedule notifications
+        if (updated.scheduleTimes.isNotEmpty) {
+          await _notificationService.cancelMedicineReminders(existing.id!);
+          await _notificationService.scheduleMedicineReminders(updated);
+        }
+
+        return existing.id!;
+      }
+
+      // --- No existing entry: create new ---
+      final initialStrip = StripBatch(
+        expiryDate: expiryDate ?? DateTime.now().add(const Duration(days: 365)),
+        quantity: newCount,
+      );
+
       final medicine = UserMedicine(
-        drugId: drug.id ?? '',
+        drugId: drugId,
         medicineName: drug.matchedBrandName ?? drug.displayName,
         category: drug.category,
-        tabletCount: tabletCount ?? 10,
-        scheduleTimes: scheduleTimes ?? [],
-        expiryDate:
-            expiryDate ??
-            DateTime.now().add(const Duration(days: 730)), // Default 2yr
-        foodWarnings: drug.hasDietaryWarning
-            ? drug.foodInteractions
-                  .map((f) => "[${f.severity}] ${f.food}: ${f.description}")
-                  .toList()
-            : [],
+        tabletCount: newCount,
+        scheduleTimes: newSchedule,
+        expiryDate: expiryDate,
+        doseIntervalDays: doseIntervalDays,
+        foodWarnings: newFoodWarnings,
+        strips: [initialStrip],
       );
 
       return await addMedicine(uid, medicine);
@@ -160,7 +214,86 @@ class MedicineInventoryService {
     }
   }
 
-  /// Update medicine with a new strip (new expiry date + add quantity)
+  /// Mark that the low stock alert has been dismissed for a medicine
+  Future<void> markLowStockAlertShown(String uid, String medicineId) async {
+    try {
+      await _medicinesCollection(uid).doc(medicineId).update({
+        'lowStockAlertShown': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw 'Failed to update low stock alert status: $e';
+    }
+  }
+
+  /// Mark that the expiring soon alert has been dismissed for a medicine
+  Future<void> markExpiringSoonAlertShown(String uid, String medicineId) async {
+    try {
+      await _medicinesCollection(uid).doc(medicineId).update({
+        'expiringSoonAlertShown': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw 'Failed to update expiring soon alert status: $e';
+    }
+  }
+
+  /// Mark that the user has acknowledged pre-dose safety warnings for a medicine.
+  /// After this, the safety modal is no longer shown for this medicine.
+  Future<void> markSafetyAcknowledged(String uid, String medicineId) async {
+    try {
+      await _medicinesCollection(uid).doc(medicineId).update({
+        'safetyAcknowledged': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw 'Failed to update safety acknowledged status: $e';
+    }
+  }
+
+  /// Mark all active alerts as dismissed for all medicines
+  Future<void> markAllAlertsShown(String uid) async {
+    try {
+      final medicines = await getUserMedicines(uid);
+      final batch = _firestore.batch();
+      int count = 0;
+
+      for (final med in medicines) {
+        if (med.id == null) continue;
+        bool needsUpdate = false;
+        final updates = <String, dynamic>{
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (med.isExpired && !med.expiryAlertShown) {
+          updates['expiryAlertShown'] = true;
+          needsUpdate = true;
+        }
+        if (med.isExpiringSoon && !med.expiringSoonAlertShown) {
+          updates['expiringSoonAlertShown'] = true;
+          needsUpdate = true;
+        }
+        if (med.isLowStock && !med.lowStockAlertShown) {
+          updates['lowStockAlertShown'] = true;
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          batch.update(_medicinesCollection(uid).doc(med.id), updates);
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+    } catch (e) {
+      throw 'Failed to clear all alerts: $e';
+    }
+  }
+
+  /// Update medicine with a new strip (appends a new batch)
+  /// Recomputes summary fields (expiryDate, tabletCount) from all batches.
   Future<void> updateStrip(
     String uid,
     String medicineId, {
@@ -168,18 +301,172 @@ class MedicineInventoryService {
     required int addQuantity,
   }) async {
     try {
-      // Get current medicine to add to existing count
       final doc = await _medicinesCollection(uid).doc(medicineId).get();
-      final currentCount = doc.data()?['tabletCount'] ?? 0;
+      final data = doc.data();
+      if (data == null) throw 'Medicine not found';
+
+      // Parse existing strips or migrate from legacy
+      List<Map<String, dynamic>> existingStrips = [];
+      final rawStrips = data['strips'] as List<dynamic>?;
+      if (rawStrips != null && rawStrips.isNotEmpty) {
+        existingStrips = rawStrips
+            .map((s) => Map<String, dynamic>.from(s))
+            .toList();
+      } else {
+        // Legacy migration: create strip from old fields
+        final legacyExpiry = data['expiryDate'] as Timestamp?;
+        final legacyCount = data['tabletCount'] ?? 0;
+        if (legacyExpiry != null && legacyCount > 0) {
+          existingStrips.add({
+            'expiryDate': legacyExpiry,
+            'quantity': legacyCount,
+            'addedAt': data['addedAt'] ?? Timestamp.now(),
+          });
+        }
+      }
+
+      // Append new batch
+      existingStrips.add({
+        'expiryDate': Timestamp.fromDate(newExpiryDate),
+        'quantity': addQuantity,
+        'addedAt': Timestamp.now(),
+      });
+
+      // Recompute summary fields from all batches
+      int totalCount = 0;
+      DateTime? earliestExpiry;
+      for (final strip in existingStrips) {
+        final qty = strip['quantity'] as int? ?? 0;
+        totalCount += qty;
+        if (qty > 0) {
+          final exp = (strip['expiryDate'] as Timestamp).toDate();
+          if (earliestExpiry == null || exp.isBefore(earliestExpiry)) {
+            earliestExpiry = exp;
+          }
+        }
+      }
 
       await _medicinesCollection(uid).doc(medicineId).update({
-        'expiryDate': Timestamp.fromDate(newExpiryDate),
-        'tabletCount': currentCount + addQuantity,
-        'expiryAlertShown': false, // Reset alert status for new strip
+        'strips': existingStrips,
+        'expiryDate': earliestExpiry != null
+            ? Timestamp.fromDate(earliestExpiry)
+            : data['expiryDate'],
+        'tabletCount': totalCount,
+        'expiryAlertShown': false,
+        'expiringSoonAlertShown': false,
+        'lowStockAlertShown': false,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       throw 'Failed to update strip: $e';
+    }
+  }
+
+  /// Removes specifically the expired batches/strips from a medicine
+  /// while keeping any valid ones. If NO valid batches remain, the caller
+  /// should decide whether to keep the empty record or delete it.
+  Future<void> clearExpiredBatches(String uid, String medicineId) async {
+    try {
+      final doc = await _medicinesCollection(uid).doc(medicineId).get();
+      final data = doc.data();
+      if (data == null) throw 'Medicine not found';
+
+      final rawStrips = data['strips'] as List<dynamic>?;
+      if (rawStrips == null || rawStrips.isEmpty) {
+        // Legacy or single expiry — just clear the stock if it's expired
+        final expiry = (data['expiryDate'] as Timestamp?)?.toDate();
+        if (expiry != null && expiry.isBefore(DateTime.now())) {
+          await _medicinesCollection(uid).doc(medicineId).update({
+            'tabletCount': 0,
+            'expiryAlertShown': true,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        return;
+      }
+
+      // Multi-strip: Filter out expired ones
+      final now = DateTime.now();
+      final updatedStrips = rawStrips.where((s) {
+        final exp = (s['expiryDate'] as Timestamp).toDate();
+        return exp.isAfter(now);
+      }).toList();
+
+      // Recompute summary fields from remaining VALID batches
+      int totalCount = 0;
+      DateTime? nextExpiry;
+      for (final strip in updatedStrips) {
+        final qty = strip['quantity'] as int? ?? 0;
+        totalCount += qty;
+        final exp = (strip['expiryDate'] as Timestamp).toDate();
+        if (nextExpiry == null || exp.isBefore(nextExpiry)) {
+          nextExpiry = exp;
+        }
+      }
+
+      await _medicinesCollection(uid).doc(medicineId).update({
+        'strips': updatedStrips,
+        'tabletCount': totalCount,
+        'expiryDate': nextExpiry != null ? Timestamp.fromDate(nextExpiry) : null,
+        'expiryAlertShown': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw 'Failed to clear expired batches: $e';
+    }
+  }
+
+  /// Selectively remove a specific strip (batch) by its index in the list
+  Future<void> removeStrip(String uid, String medicineId, int stripIndex) async {
+    try {
+      final doc = await _medicinesCollection(uid).doc(medicineId).get();
+      final data = doc.data();
+      if (data == null) throw 'Medicine not found';
+
+      final rawStrips = data['strips'] as List<dynamic>?;
+      List<Map<String, dynamic>> updatedStrips = [];
+
+      if (rawStrips != null && rawStrips.isNotEmpty) {
+        updatedStrips = rawStrips
+            .map((s) => Map<String, dynamic>.from(s))
+            .toList();
+      } else {
+        // Legacy migration: create a strip from top-level fields
+        final legacyExpiry = data['expiryDate'] as Timestamp?;
+        final legacyCount = data['tabletCount'] ?? 0;
+        if (legacyExpiry != null && legacyCount > 0) {
+          updatedStrips.add({
+            'expiryDate': legacyExpiry,
+            'quantity': legacyCount,
+            'addedAt': data['addedAt'] ?? Timestamp.now(),
+          });
+        }
+      }
+
+      if (stripIndex < updatedStrips.length) {
+        updatedStrips.removeAt(stripIndex);
+      }
+
+      // Recompute summary fields
+      int totalCount = 0;
+      DateTime? nextExpiry;
+      for (final strip in updatedStrips) {
+        final qty = strip['quantity'] as int? ?? 0;
+        totalCount += qty;
+        final exp = (strip['expiryDate'] as Timestamp).toDate();
+        if (nextExpiry == null || exp.isBefore(nextExpiry)) {
+          nextExpiry = exp;
+        }
+      }
+
+      await _medicinesCollection(uid).doc(medicineId).update({
+        'strips': updatedStrips,
+        'tabletCount': totalCount,
+        'expiryDate': nextExpiry != null ? Timestamp.fromDate(nextExpiry) : null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw 'Failed to remove strip: $e';
     }
   }
 
@@ -277,13 +564,16 @@ class MedicineInventoryService {
   }
 
   /// Log a dose when user marks medicine as taken
-  /// Also decrements the tablet count
+  /// Deducts from earliest-expiring strip first (FEFO)
+  /// If [takenAt] is provided, the dose log is recorded with that timestamp
+  /// (used for retroactive missed dose logging). Otherwise uses server time.
   Future<void> logDose({
     required String uid,
     required String medicineId,
     required String medicineName,
     required int quantity,
     String? scheduledTime,
+    DateTime? takenAt,
   }) async {
     try {
       final medDocRef = _medicinesCollection(uid).doc(medicineId);
@@ -299,25 +589,78 @@ class MedicineInventoryService {
         throw 'Cannot log dose: Stock is empty';
       }
 
-      final newCount = (currentCount - quantity).clamp(0, 9999);
+      // Parse strips for FEFO deduction
+      List<Map<String, dynamic>> strips = [];
+      final rawStrips = medData['strips'] as List<dynamic>?;
+      if (rawStrips != null && rawStrips.isNotEmpty) {
+        strips = rawStrips
+            .map((s) => Map<String, dynamic>.from(s))
+            .toList();
+        // Sort by expiry date ascending (earliest first)
+        strips.sort((a, b) {
+          final expA = (a['expiryDate'] as Timestamp).toDate();
+          final expB = (b['expiryDate'] as Timestamp).toDate();
+          return expA.compareTo(expB);
+        });
+
+        // Deduct from earliest-expiring strips first
+        int remaining = quantity;
+        for (final strip in strips) {
+          if (remaining <= 0) break;
+          final qty = strip['quantity'] as int? ?? 0;
+          if (qty <= 0) continue;
+          final deduct = remaining > qty ? qty : remaining;
+          strip['quantity'] = qty - deduct;
+          remaining -= deduct;
+        }
+
+        // Remove depleted strips
+        strips.removeWhere((s) => (s['quantity'] as int? ?? 0) <= 0);
+      }
+
+      // Recompute summary fields
+      int totalCount = strips.isEmpty
+          ? (currentCount - quantity).clamp(0, 9999)
+          : strips.fold<int>(0, (sum, s) => sum + (s['quantity'] as int? ?? 0));
+
+      DateTime? earliestExpiry;
+      for (final strip in strips) {
+        final qty = strip['quantity'] as int? ?? 0;
+        if (qty > 0) {
+          final exp = (strip['expiryDate'] as Timestamp).toDate();
+          if (earliestExpiry == null || exp.isBefore(earliestExpiry)) {
+            earliestExpiry = exp;
+          }
+        }
+      }
 
       // Perform all server updates in a single batch
       final batch = _firestore.batch();
 
       // 1. Add log entry
+      // Use provided takenAt for retroactive logging, otherwise server time
       batch.set(logDocRef, {
         'medicineId': medicineId,
         'medicineName': medicineName,
-        'takenAt': FieldValue.serverTimestamp(),
+        'takenAt': takenAt != null
+            ? Timestamp.fromDate(takenAt)
+            : FieldValue.serverTimestamp(),
         'scheduledTime': scheduledTime,
         'quantityTaken': quantity,
       });
 
-      // 2. Update tablet count
-      batch.update(medDocRef, {
-        'tabletCount': newCount,
+      // 2. Update medicine with new strip state and summary
+      final updateData = <String, dynamic>{
+        'tabletCount': totalCount,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      if (strips.isNotEmpty || rawStrips != null) {
+        updateData['strips'] = strips;
+        if (earliestExpiry != null) {
+          updateData['expiryDate'] = Timestamp.fromDate(earliestExpiry);
+        }
+      }
+      batch.update(medDocRef, updateData);
 
       // Commit early so user sees result
       await batch.commit();
@@ -344,13 +687,30 @@ class MedicineInventoryService {
     int limit = 50,
   }) async {
     try {
+      // Primary attempt: indexed query
       final snapshot = await _doseLogsCollection(
         uid,
       ).orderBy('takenAt', descending: true).limit(limit).get();
 
       return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
     } catch (e) {
-      throw 'Failed to get dose logs: $e';
+      debugPrint("Indexed history query failed, falling back: $e");
+      // Fallback: simple query (no order by avoids index requirement)
+      // Then sort locally for the user
+      final snapshot = await _doseLogsCollection(uid).limit(limit * 2).get();
+
+      final logs = snapshot.docs
+          .map((doc) => {...doc.data(), 'id': doc.id})
+          .toList();
+
+      logs.sort((a, b) {
+        final tA = a['takenAt'] as Timestamp?;
+        final tB = b['takenAt'] as Timestamp?;
+        if (tA == null || tB == null) return 0;
+        return tB.compareTo(tA); // Descending
+      });
+
+      return logs.take(limit).toList();
     }
   }
 
@@ -382,6 +742,50 @@ class MedicineInventoryService {
     }
   }
 
+  /// Get dose logs for a specific date
+  Future<List<Map<String, dynamic>>> getDoseLogsForDate(
+    String uid,
+    DateTime date,
+  ) async {
+    try {
+      final startOfDay = DateTime(date.year, date.month, date.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final snapshot = await _doseLogsCollection(uid)
+          .where(
+            'takenAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+          )
+          .where('takenAt', isLessThan: Timestamp.fromDate(endOfDay))
+          .orderBy('takenAt', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+    } catch (e) {
+      // Fallback: fetch recent and filter locally (avoids composite index issues)
+      try {
+        final snapshot = await _doseLogsCollection(
+          uid,
+        ).orderBy('takenAt', descending: true).limit(200).get();
+
+        final startOfDay = DateTime(date.year, date.month, date.day);
+        final endOfDay = startOfDay.add(const Duration(days: 1));
+
+        return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).where((
+          log,
+        ) {
+          final takenAt = log['takenAt'];
+          if (takenAt == null) return false;
+          final logDate = (takenAt as Timestamp).toDate();
+          return logDate.isAfter(startOfDay) && logDate.isBefore(endOfDay) ||
+              logDate.isAtSameMomentAs(startOfDay);
+        }).toList();
+      } catch (e2) {
+        throw 'Failed to get dose logs for date: $e2';
+      }
+    }
+  }
+
   /// Get dose logs for a specific medicine
   Future<List<Map<String, dynamic>>> getMedicineDoseLogs(
     String uid,
@@ -410,7 +814,7 @@ class MedicineInventoryService {
     try {
       final allMedicines = medicines ?? await getUserMedicines(uid);
       final scheduledMedicines = allMedicines
-          .where((m) => m.scheduleTimes.isNotEmpty && !m.isExpired)
+          .where((m) => m.scheduleTimes.isNotEmpty)
           .toList();
 
       if (scheduledMedicines.isEmpty) {
@@ -423,13 +827,13 @@ class MedicineInventoryService {
 
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final thirtyDaysAgo = today.subtract(const Duration(days: 35));
+      final thirtyFiveDaysAgo = today.subtract(const Duration(days: 35));
 
-      // Get logs only for the last 35 days (focused query)
+      // 1. Fetch logs for the last 35 days
       final snapshot = await _doseLogsCollection(uid)
           .where(
             'takenAt',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
+            isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyFiveDaysAgo),
           )
           .orderBy('takenAt', descending: true)
           .get();
@@ -438,87 +842,97 @@ class MedicineInventoryService {
           .map((doc) => {...doc.data(), 'id': doc.id})
           .toList();
 
-      // Total expected doses per day
+      // 2. Build set of active medicine IDs so we only count logs for
+      //    medicines that are CURRENTLY in the cabinet.
+      final activeMedicineIds = scheduledMedicines
+          .where((m) => m.id != null)
+          .map((m) => m.id!)
+          .toSet();
+
+      // 3. Map unique doses taken per day (only for active medicines)
+      // Key: dateKey (String), Value: Set of "medicineId|scheduledTime"
+      final Map<String, Set<String>> takenDosesPerDay = {};
+      for (final log in logs) {
+        final takenAt = log['takenAt'] as Timestamp?;
+        final medId = log['medicineId'] as String?;
+        final schTime = log['scheduledTime'] as String?;
+
+        if (takenAt == null || medId == null || schTime == null) continue;
+
+        // Skip logs for medicines that are no longer in the cabinet
+        if (!activeMedicineIds.contains(medId)) continue;
+
+        final logDate = takenAt.toDate();
+        final dateKey = '${logDate.year}-${logDate.month}-${logDate.day}';
+
+        takenDosesPerDay.putIfAbsent(dateKey, () => <String>{});
+        takenDosesPerDay[dateKey]!.add('$medId|$schTime');
+      }
+
+      // 4. Calculate expected doses (assuming same schedule for past 30 days for simplicity)
       final expectedDosesPerDay = scheduledMedicines.fold<int>(
         0,
         (total, m) => total + m.scheduleTimes.length,
       );
 
-      if (expectedDosesPerDay == 0) {
-        return {
-          'currentStreak': 0,
-          'longestStreak': 0,
-          'weeklyAdherence': List.filled(7, 0.0),
-        };
-      }
-
-      // Count unique scheduled doses per day
-      // Key: dateKey, Value: Set of "medicineId|scheduledTime"
-      final Map<String, Set<String>> uniqueDosesPerDay = {};
-
-      for (final log in logs) {
-        final takenAt = log['takenAt'];
-        final medicineId = log['medicineId'] as String?;
-        final schTime = log['scheduledTime'] as String?;
-
-        if (takenAt == null || medicineId == null || schTime == null) continue;
-
-        final logDate = (takenAt as Timestamp).toDate();
-        final dateKey = '${logDate.year}-${logDate.month}-${logDate.day}';
-
-        uniqueDosesPerDay.putIfAbsent(dateKey, () => <String>{});
-        uniqueDosesPerDay[dateKey]!.add('$medicineId|$schTime');
-      }
-
-      // Calculate current streak (consecutive days with >= 80% adherence)
+      // 5. Calculate Current and Longest Streak
       int currentStreak = 0;
       int longestStreak = 0;
-      int tempStreak = 0;
+      int runningStreak = 0;
+      bool isCurrentStreakBroken = false;
 
-      for (int i = 0; i < 30; i++) {
+      // Check last 30 days backwards
+      for (int i = 0; i <= 30; i++) {
         final checkDate = today.subtract(Duration(days: i));
         final dateKey = '${checkDate.year}-${checkDate.month}-${checkDate.day}';
-        final dosesTakenCount = uniqueDosesPerDay[dateKey]?.length ?? 0;
-        final adherence = dosesTakenCount / expectedDosesPerDay;
+        final takenCount = takenDosesPerDay[dateKey]?.length ?? 0;
 
-        if (adherence >= 0.8) {
-          tempStreak++;
-          if (i == currentStreak) {
-            currentStreak = tempStreak;
-          }
+        // Adherence for this day
+        final adherence = takenCount / expectedDosesPerDay;
+        final isSuccessful = adherence >= 0.8;
+
+        if (isSuccessful) {
+          runningStreak++;
         } else {
-          // If it's today and we haven't failed yet (0 doses taken), don't break streak
-          if (i == 0 && dosesTakenCount == 0) {
-            continue;
+          // Special handling for today: if no doses taken yet, don't break the streak
+          // unless it's past all scheduled times (we'll keep it simple for now)
+          if (i == 0 && takenCount == 0) {
+            // Keep streak alive but don't increment runningStreak for today yet
+          } else {
+            // Streak is broken
+            if (!isCurrentStreakBroken) {
+              currentStreak = runningStreak;
+              isCurrentStreakBroken = true;
+            }
+            runningStreak = 0;
           }
-          // If it's today and we've taken some but not all, check if it's still early?
-          // For now, let's keep it simple: only break if adherence is truly low and it's not "early today"
-          if (i == 0 && adherence < 0.8) {
-            // Don't break streak FOR TODAY if it's early, but also don't increment it
-            // Tweak: if adherence is > 0 but < 80% today, we don't break but we don't count it as a "full day" yet
-            continue;
-          }
-          tempStreak = 0;
         }
-        longestStreak = tempStreak > longestStreak ? tempStreak : longestStreak;
+
+        if (runningStreak > longestStreak) longestStreak = runningStreak;
+
+        // If we reached the end of the 30 days and the current streak hasn't been "broken" (recorded)
+        if (i == 30 && !isCurrentStreakBroken) {
+          currentStreak = runningStreak;
+        }
       }
 
-      // Calculate 7-day adherence heatmap (Mon=0, Sun=6)
+      // 6. Calculate 7-day Weekly Adherence Heatmap (Mon-Sun)
       final weekStart = today.subtract(Duration(days: today.weekday - 1));
       final List<double> weeklyAdherence = List.filled(7, 0.0);
 
       for (int i = 0; i < 7; i++) {
         final dayDate = weekStart.add(Duration(days: i));
-        if (dayDate.isAfter(today)) break;
+        // If it's a future day, leave it at 0.0
+        if (dayDate.isAfter(today)) {
+          weeklyAdherence[i] = 0.0;
+          continue;
+        }
 
         final dateKey = '${dayDate.year}-${dayDate.month}-${dayDate.day}';
-        final dosesTakenCount = uniqueDosesPerDay[dateKey]?.length ?? 0;
+        final takenCount = takenDosesPerDay[dateKey]?.length ?? 0;
 
-        // Final adherence value for the heatmap
-        weeklyAdherence[i] = (dosesTakenCount / expectedDosesPerDay).clamp(
-          0.0,
-          1.0,
-        );
+        // Heatmap adherence
+        weeklyAdherence[i] = (takenCount / expectedDosesPerDay).clamp(0.0, 1.0);
       }
 
       return {

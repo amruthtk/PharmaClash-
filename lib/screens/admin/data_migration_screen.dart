@@ -1147,6 +1147,61 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
         ],
       },
       {
+        "id": "ibuprofen",
+        "name": "Ibuprofen",
+        "brands": ["Brufen", "Ibugesic", "Advil"],
+        "salt": "NSAID",
+        "allergy_group": "NSAIDs",
+        "food_clashes": [
+          {
+            "item": "Alcohol",
+            "risk": "High",
+            "note": "Causes severe stomach bleeding and may harm kidneys.",
+          },
+        ],
+        "condition_clashes": [
+          {
+            "condition": "Peptic Ulcers",
+            "risk": "Critical",
+            "note": "Can cause stomach bleeding or perforation.",
+          },
+          {
+            "condition": "Asthma",
+            "risk": "High",
+            "note": "May trigger severe breathing difficulty (Bronchospasm).",
+          },
+          {
+            "condition": "Kidney Disease",
+            "risk": "High",
+            "note": "Reduces blood flow to kidneys, worsening function.",
+          },
+          {
+            "condition": "Pregnancy (3rd Trimester)",
+            "risk": "Critical",
+            "note":
+                "Can cause heart defects in the baby if taken late in pregnancy.",
+          },
+        ],
+        "drug_drug_interactions": [
+          {
+            "target": "Warfarin",
+            "risk": "Critical",
+            "note": "Massively increases bleeding risk. Often fatal.",
+          },
+          {
+            "target": "Aspirin",
+            "risk": "High",
+            "note": "Blocks the heart-protective effect of Aspirin.",
+          },
+          {
+            "target": "Prednisolone",
+            "risk": "High",
+            "note": "Guaranteed risk of severe stomach ulcers/bleeding.",
+          },
+        ],
+      },
+
+      {
         "id": "metformin",
         "name": "Metformin",
         "brands": ["Glycomet", "Metsmall"],

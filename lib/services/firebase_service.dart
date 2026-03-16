@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'biometric_service.dart';
 
 /// Firebase Service - Handles all Firebase Authentication and Firestore operations
 class FirebaseService {
@@ -84,11 +85,14 @@ class FirebaseService {
 
       // Save user profile to Firestore if new user
       if (userCredential.additionalUserInfo?.isNewUser ?? false) {
-        await saveUserProfile(
-          uid: userCredential.user!.uid,
-          email: userCredential.user!.email ?? '',
-          fullName: userCredential.user!.displayName ?? '',
-        );
+        await Future.wait([
+          saveUserProfile(
+            uid: userCredential.user!.uid,
+            email: userCredential.user!.email ?? '',
+            fullName: userCredential.user!.displayName ?? '',
+          ),
+          updateDisplayName(userCredential.user!.displayName ?? ''),
+        ]);
       }
 
       return userCredential;
@@ -111,8 +115,20 @@ class FirebaseService {
     }
   }
 
+  /// Sign in anonymously (for guest mode)
+  Future<UserCredential?> signInAnonymously() async {
+    try {
+      return await _auth.signInAnonymously();
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Anonymous sign-in failed. Please try again.';
+    }
+  }
+
   /// Sign out (including Google)
   Future<void> signOut() async {
+    BiometricService.isSessionUnlocked = false;
     await _googleSignIn.signOut();
     await _auth.signOut();
   }
@@ -142,7 +158,6 @@ class FirebaseService {
     required String uid,
     required String email,
     required String fullName,
-    String? phone,
     DateTime? dateOfBirth,
     String? gender,
     bool? isAdmin,
@@ -150,7 +165,6 @@ class FirebaseService {
     final data = <String, dynamic>{
       'email': email,
       'fullName': fullName,
-      'phone': phone,
       'dateOfBirth': dateOfBirth?.toIso8601String(),
       'gender': gender,
       'createdAt': FieldValue.serverTimestamp(),

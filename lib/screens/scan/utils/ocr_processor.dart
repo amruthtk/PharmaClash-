@@ -5,6 +5,13 @@ import 'package:camera/camera.dart';
 import '../../../models/drug_model.dart';
 import '../../../services/drug_service.dart';
 
+/// Result of OCR processing
+class OcrResult {
+  final List<DrugModel> matchedDrugs;
+  final String rawText;
+  OcrResult({required this.matchedDrugs, required this.rawText});
+}
+
 /// OCR processor utility for extracting drug names from camera images
 class OcrProcessor {
   final TextRecognizer _textRecognizer = TextRecognizer();
@@ -15,10 +22,8 @@ class OcrProcessor {
     : _drugService = drugService;
 
   /// Process a captured image and extract drug information
-  /// Returns a list of matched drugs, or empty list if none found
-  Future<List<DrugModel>> processImage(
-    CameraController cameraController,
-  ) async {
+  /// Returns a result object containing matches and raw text
+  Future<OcrResult> processImage(CameraController cameraController) async {
     try {
       final image = await cameraController.takePicture();
       final inputImage = InputImage.fromFilePath(image.path);
@@ -29,16 +34,17 @@ class OcrProcessor {
         debugPrint(recognizedText.text);
         debugPrint('=========================');
 
-        return await _processOCRText(recognizedText.text);
+        final drugs = await _processOCRText(recognizedText.text);
+        return OcrResult(matchedDrugs: drugs, rawText: recognizedText.text);
       } else {
         debugPrint('OCR: No text detected in image');
-        return [];
+        return OcrResult(matchedDrugs: [], rawText: '');
       }
     } catch (e) {
       if (!e.toString().contains('Disposed')) {
         debugPrint('Error processing image: $e');
       }
-      return [];
+      return OcrResult(matchedDrugs: [], rawText: '');
     }
   }
 

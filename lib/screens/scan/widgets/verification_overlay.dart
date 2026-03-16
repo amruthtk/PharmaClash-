@@ -13,6 +13,8 @@ class VerificationOverlay extends StatelessWidget {
   final VoidCallback onConfirm;
   final Function(DrugModel) onAddDrug;
   final Function(DrugModel) onRemoveDrug;
+  final VoidCallback onDeepSearch;
+  final bool isAiSearching;
 
   const VerificationOverlay({
     super.key,
@@ -23,22 +25,70 @@ class VerificationOverlay extends StatelessWidget {
     required this.onConfirm,
     required this.onAddDrug,
     required this.onRemoveDrug,
+    required this.onDeepSearch,
+    required this.isAiSearching,
   });
 
   @override
   Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
     return Positioned.fill(
       child: Container(
         color: AppColors.softWhite,
         child: SafeArea(
+          bottom: false,
           child: Column(
             children: [
-              const SizedBox(height: 80),
+              // Top Bar — NO indefinite spinner
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: onRescan,
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      color: AppColors.darkText,
+                    ),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Verify Scan',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkText,
+                            ),
+                          ),
+                          Text(
+                            'Step 2 of 3 · Verify Medicines',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.primaryTeal,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Step indicator (replaces the old indefinite spinner)
+                    _buildStepIndicator(),
+                  ],
+                ),
+              ),
+
+              // Progress bar
+              _buildProgressBar(),
 
               // Detected drugs section
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardHeight),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -71,6 +121,8 @@ class VerificationOverlay extends StatelessWidget {
                         searchResults: searchResults,
                         detectedDrugs: detectedDrugs,
                         onAddDrug: onAddDrug,
+                        onDeepSearch: onDeepSearch,
+                        isAiSearching: isAiSearching,
                       ),
 
                       const SizedBox(height: 100),
@@ -79,9 +131,149 @@ class VerificationOverlay extends StatelessWidget {
                 ),
               ),
 
-              // Action buttons
-              _buildVerificationActions(context),
+              // Action buttons — slides up smoothly with keyboard
+              AnimatedPadding(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(bottom: keyboardHeight),
+                child: _buildVerificationActions(context),
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primaryTeal.withValues(alpha: 0.1),
+            AppColors.deepTeal.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.primaryTeal.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLabeledStep(
+            label: 'Scan',
+            stepNum: 1,
+            isDone: true,
+            isCurrent: false,
+          ),
+          _buildStepConnector(isDone: true),
+          _buildLabeledStep(
+            label: 'Verify',
+            stepNum: 2,
+            isDone: false,
+            isCurrent: true,
+          ),
+          _buildStepConnector(isDone: false),
+          _buildLabeledStep(
+            label: 'Setup',
+            stepNum: 3,
+            isDone: false,
+            isCurrent: false,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabeledStep({
+    required String label,
+    required int stepNum,
+    required bool isDone,
+    required bool isCurrent,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildStepDot(isDone: isDone, isCurrent: isCurrent),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+            color: isDone || isCurrent
+                ? AppColors.primaryTeal
+                : AppColors.grayText,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepDot({required bool isDone, required bool isCurrent}) {
+    return Container(
+      width: isCurrent ? 12 : 8,
+      height: isCurrent ? 12 : 8,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isDone
+            ? AppColors.primaryTeal
+            : isCurrent
+            ? AppColors.primaryTeal
+            : AppColors.lightBorderColor,
+        border: isCurrent
+            ? Border.all(
+                color: AppColors.primaryTeal.withValues(alpha: 0.4),
+                width: 2,
+              )
+            : null,
+        boxShadow: isCurrent
+            ? [
+                BoxShadow(
+                  color: AppColors.primaryTeal.withValues(alpha: 0.3),
+                  blurRadius: 6,
+                ),
+              ]
+            : null,
+      ),
+      child: isDone
+          ? const Icon(Icons.check, size: 6, color: Colors.white)
+          : null,
+    );
+  }
+
+  Widget _buildStepConnector({required bool isDone}) {
+    return Container(
+      width: 20,
+      height: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: isDone ? AppColors.primaryTeal : AppColors.lightBorderColor,
+        borderRadius: BorderRadius.circular(1),
+      ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return Container(
+      height: 3,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: AppColors.lightBorderColor.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: 0.66,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primaryTeal, AppColors.mintGreen],
+            ),
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
       ),
@@ -111,21 +303,28 @@ class VerificationOverlay extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Detected Medicine',
-                  style: TextStyle(
+                  detectedDrugs.isEmpty
+                      ? 'No Medicine Detected'
+                      : '${detectedDrugs.length} Medicine${detectedDrugs.length > 1 ? 's' : ''} Found',
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: AppColors.darkText,
                   ),
                 ),
                 Text(
-                  'Please verify the scanned medicine is correct',
-                  style: TextStyle(fontSize: 12, color: AppColors.grayText),
+                  detectedDrugs.isEmpty
+                      ? 'Search manually below'
+                      : 'Please verify before checking',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.grayText,
+                  ),
                 ),
               ],
             ),
@@ -224,13 +423,52 @@ class VerificationOverlay extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  drug.displayName.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.darkText,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        drug.displayName.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.darkText,
+                        ),
+                      ),
+                    ),
+                    if (drug.isAiGenerated)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 10,
+                              color: Colors.blue,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Gemini AI',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.blue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
                 if (drug.brandNames.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -257,8 +495,10 @@ class VerificationOverlay extends StatelessWidget {
                 const SizedBox(height: 6),
                 // Category tag
                 _buildCategoryTags(drug),
-                // Dietary and Alcohol Warning Icons
-                if (drug.hasDietaryWarning || drug.hasAlcoholWarning) ...[
+                // Dietary, Alcohol, and Condition Warning Icons
+                if (drug.hasDietaryWarning ||
+                    drug.hasAlcoholWarning ||
+                    drug.conditionWarnings.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   _buildWarningIcons(drug),
                 ],
@@ -324,6 +564,18 @@ class VerificationOverlay extends StatelessWidget {
       spacing: 6,
       runSpacing: 4,
       children: [
+        if (drug.conditionWarnings.isNotEmpty)
+          ...drug.conditionWarnings.map(
+            (condition) => _buildWarningIcon(
+              icon: Icons.warning_amber_rounded,
+              label: condition
+                  .split(':')
+                  .first, // Showing only condition name for space
+              severity: 'caution',
+              isFood: false,
+              isCondition: true,
+            ),
+          ),
         if (drug.hasDietaryWarning)
           ...drug.foodInteractions.map(
             (food) => _buildWarningIcon(
@@ -336,7 +588,6 @@ class VerificationOverlay extends StatelessWidget {
         if (drug.hasAlcoholWarning)
           _buildWarningIcon(
             icon: Icons.local_bar,
-            // Changed from "Alcohol" to actionable text to avoid ambiguity
             label: _getAlcoholLabel(drug.alcoholRestriction),
             severity: drug.alcoholRestriction,
             isFood: false,
@@ -363,47 +614,56 @@ class VerificationOverlay extends StatelessWidget {
     required String label,
     required String severity,
     required bool isFood,
+    bool isCondition = false,
   }) {
     Color bgColor;
     Color iconColor;
 
-    switch (severity.toLowerCase()) {
-      case 'avoid':
-        bgColor = Colors.red.shade100;
-        iconColor = Colors.red.shade700;
-        break;
-      case 'caution':
-        bgColor = Colors.orange.shade100;
-        iconColor = Colors.orange.shade700;
-        break;
-      case 'limit':
-        bgColor = Colors.amber.shade100;
-        iconColor = Colors.amber.shade700;
-        break;
-      default:
-        bgColor = Colors.grey.shade100;
-        iconColor = Colors.grey.shade600;
+    if (isCondition) {
+      bgColor = Colors.orange.withValues(alpha: 0.1);
+      iconColor = Colors.orange.shade800;
+    } else {
+      switch (severity.toLowerCase()) {
+        case 'avoid':
+          bgColor = Colors.red.withValues(alpha: 0.1);
+          iconColor = Colors.red.shade700;
+          break;
+        case 'caution':
+          bgColor = Colors.orange.withValues(alpha: 0.1);
+          iconColor = Colors.orange.shade700;
+          break;
+        case 'limit':
+          bgColor = Colors.amber.withValues(alpha: 0.1);
+          iconColor = Colors.amber.shade700;
+          break;
+        default:
+          bgColor = Colors.grey.withValues(alpha: 0.1);
+          iconColor = Colors.grey.shade600;
+      }
     }
 
     return Tooltip(
-      message: isFood ? '$label: $severity' : 'Alcohol: $severity',
+      message: isCondition
+          ? 'Contradiction: $label'
+          : (isFood ? '$label: $severity' : 'Alcohol: $severity'),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: iconColor.withValues(alpha: 0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 12, color: iconColor),
-            const SizedBox(width: 3),
+            const SizedBox(width: 4),
             Text(
-              label.length > 10 ? '${label.substring(0, 8)}...' : label,
+              label.length > 15 ? '${label.substring(0, 12)}...' : label,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 color: iconColor,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],

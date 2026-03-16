@@ -126,6 +126,16 @@ class DrugModel {
   /// Food interactions (combined from all ingredients)
   final List<FoodInteraction> foodInteractions;
 
+  /// Alcohol restriction: "avoid", "caution", "limit", "none"
+  final String alcoholRestriction;
+
+  /// Specific warning about alcohol for this drug
+  final String? alcoholWarningDescription;
+
+  /// The specific brand name that was matched during search or scan
+  /// This is used for UI display to show the user what they actually looked for
+  final String? matchedBrandName;
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -141,6 +151,9 @@ class DrugModel {
     this.conditionWarnings = const [],
     this.drugInteractions = const [],
     this.foodInteractions = const [],
+    this.alcoholRestriction = 'none',
+    this.alcoholWarningDescription,
+    this.matchedBrandName,
     this.createdAt,
     this.updatedAt,
   });
@@ -161,6 +174,16 @@ class DrugModel {
     return activeIngredients.map((i) => i.name).toList();
   }
 
+  /// Whether this drug has any dietary/food warnings
+  bool get hasDietaryWarning => foodInteractions.isNotEmpty;
+
+  /// Whether this drug has any alcohol warnings
+  bool get hasAlcoholWarning =>
+      alcoholRestriction != 'none' && alcoholRestriction.isNotEmpty;
+
+  /// Whether this drug was generated/fetched by AI at runtime
+  bool get isAiGenerated => id?.startsWith('ai_') ?? false;
+
   Map<String, dynamic> toMap() {
     return {
       'displayName': displayName,
@@ -173,6 +196,9 @@ class DrugModel {
       'conditionWarnings': conditionWarnings,
       'drugInteractions': drugInteractions.map((e) => e.toMap()).toList(),
       'foodInteractions': foodInteractions.map((e) => e.toMap()).toList(),
+      'alcoholRestriction': alcoholRestriction,
+      'alcoholWarningDescription': alcoholWarningDescription,
+      'matchedBrandName': matchedBrandName,
       'createdAt': createdAt ?? DateTime.now(),
       'updatedAt': DateTime.now(),
       // Keep genericName for backward compatibility
@@ -208,6 +234,9 @@ class DrugModel {
               ?.map((e) => FoodInteraction.fromMap(e as Map<String, dynamic>))
               .toList() ??
           [],
+      alcoholRestriction: map['alcoholRestriction'] ?? 'none',
+      alcoholWarningDescription: map['alcoholWarningDescription'],
+      matchedBrandName: map['matchedBrandName'],
       createdAt: map['createdAt']?.toDate(),
       updatedAt: map['updatedAt']?.toDate(),
     );
@@ -225,6 +254,9 @@ class DrugModel {
     List<String>? conditionWarnings,
     List<DrugInteraction>? drugInteractions,
     List<FoodInteraction>? foodInteractions,
+    String? alcoholRestriction,
+    String? alcoholWarningDescription,
+    String? matchedBrandName,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -240,6 +272,10 @@ class DrugModel {
       conditionWarnings: conditionWarnings ?? this.conditionWarnings,
       drugInteractions: drugInteractions ?? this.drugInteractions,
       foodInteractions: foodInteractions ?? this.foodInteractions,
+      alcoholRestriction: alcoholRestriction ?? this.alcoholRestriction,
+      alcoholWarningDescription:
+          alcoholWarningDescription ?? this.alcoholWarningDescription,
+      matchedBrandName: matchedBrandName ?? this.matchedBrandName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

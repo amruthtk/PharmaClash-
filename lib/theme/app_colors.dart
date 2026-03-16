@@ -31,4 +31,25 @@ class AppColors {
   static const Color lightBorderColor = Color(
     0xFFCBD5E1,
   ); // Slate-300: Visible borders
+
+  // Glassmorphism colors
+  static Color glassWhite = Colors.white.withOpacity(0.7);
+  static Color glassBorder = Colors.white.withOpacity(0.4);
+  static Color glassSubtleBorder = Colors.white.withOpacity(0.2);
+
+  // Liquid gradients
+  static const List<Color> liquidTeal = [
+    Color(0xFF14B8A6), // Teal-500
+    Color(0xFF0D9488), // Teal-600
+  ];
+
+  static const List<Color> liquidIndigo = [
+    Color(0xFF6366F1), // Indigo-500
+    Color(0xFF4F46E5), // Indigo-600
+  ];
+
+  static const List<Color> liquidEmerald = [
+    Color(0xFF10B981), // Emerald-500
+    Color(0xFF059669), // Emerald-600
+  ];
 }

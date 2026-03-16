@@ -228,6 +228,9 @@ class NotificationService {
 
     // 3. Reschedule daily health check
     await scheduleDailyHealthCheck();
+
+    // 4. Reschedule nightly missed dose "last call" at 10 PM
+    await scheduleNightlyMissedDoseCheck();
   }
 
   /// Cancel follow-up reminder when dose is logged
@@ -417,5 +420,55 @@ class NotificationService {
       matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
       payload: 'daily_check',
     );
+  }
+
+  // ==================== Nightly Missed Dose Last Call ====================
+
+  /// Fixed notification ID for the nightly missed dose check
+  static const int _nightlyCheckId = 99003;
+
+  /// Schedule a daily 10 PM "last call" notification that asks the user
+  /// about any doses they may have forgotten to log during the day.
+  Future<void> scheduleNightlyMissedDoseCheck() async {
+    final now = DateTime.now();
+    var scheduledTime = DateTime(now.year, now.month, now.day, 22, 0);
+
+    // If 10 PM has passed today, schedule for tomorrow
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime = scheduledTime.add(const Duration(days: 1));
+    }
+
+    final tzScheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    await _notifications.zonedSchedule(
+      _nightlyCheckId,
+      '🌙 Nightly Medicine Check',
+      'Did you take all your medicines today? Tap to review before bed.',
+      tzScheduledDate,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'nightly_dose_check',
+          'Nightly Dose Check',
+          channelDescription:
+              'Nightly reminder to confirm all doses were taken',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
+      payload: 'nightly_missed_dose_check',
+    );
+  }
+
+  /// Cancel the nightly missed dose check notification
+  Future<void> cancelNightlyMissedDoseCheck() async {
+    await _notifications.cancel(_nightlyCheckId);
   }
 }

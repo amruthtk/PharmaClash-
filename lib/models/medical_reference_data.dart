@@ -1,5 +1,5 @@
 /// Medical Reference Data - Source of Truth for validated medical terms
-/// This class contains the master list of all valid allergies and chronic diseases.
+/// This class contains the master list of all valid allergies and health conditions.
 /// Users can only select from these verified items.
 ///
 /// Note: In a production app, this would be fetched from a backend database
@@ -8,9 +8,9 @@ class MedicalReferenceData {
   // Private constructor to prevent instantiation
   MedicalReferenceData._();
 
-  /// List of verified chronic diseases/conditions
+  /// List of verified health conditions (includes chronic and temporary states)
   /// Grouped by system for comprehensive coverage
-  static const List<String> chronicDiseases = [
+  static const List<String> healthConditions = [
     // Cardiovascular
     'Hypertension (High Blood Pressure)',
     'Hypotension (Low Blood Pressure)',
@@ -179,12 +179,12 @@ class MedicalReferenceData {
     'Egg Protein (Vaccines)',
   ];
 
-  /// Search chronic diseases by query (case-insensitive)
-  static List<String> searchChronicDiseases(String query) {
-    if (query.isEmpty) return chronicDiseases;
+  /// Search health conditions by query (case-insensitive)
+  static List<String> searchHealthConditions(String query) {
+    if (query.isEmpty) return healthConditions;
     final lowerQuery = query.toLowerCase();
-    return chronicDiseases
-        .where((disease) => disease.toLowerCase().contains(lowerQuery))
+    return healthConditions
+        .where((condition) => condition.toLowerCase().contains(lowerQuery))
         .toList();
   }
 
@@ -197,11 +197,11 @@ class MedicalReferenceData {
         .toList();
   }
 
-  /// Check if a chronic disease is valid
-  static bool isValidChronicDisease(String disease) {
-    return chronicDiseases
+  /// Check if a health condition is valid
+  static bool isValidHealthCondition(String condition) {
+    return healthConditions
         .map((d) => d.toLowerCase())
-        .contains(disease.toLowerCase());
+        .contains(condition.toLowerCase());
   }
 
   /// Check if a drug allergy is valid

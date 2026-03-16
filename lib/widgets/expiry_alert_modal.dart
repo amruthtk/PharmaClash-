@@ -193,9 +193,11 @@ class ExpiryAlertModal extends StatelessWidget {
                         onRemove();
                       },
                       icon: const Icon(Icons.delete_rounded, size: 20),
-                      label: const Text(
-                        'Remove from Cabinet',
-                        style: TextStyle(
+                      label: Text(
+                        medicine.strips.any((s) => !s.isExpired)
+                            ? 'Remove Expired Stock'
+                            : 'Remove from Cabinet',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),

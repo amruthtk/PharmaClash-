@@ -51,7 +51,6 @@ class _SafetyConfirmationModalState extends State<SafetyConfirmationModal> {
   bool _noAlcoholConfirmed = false;
   bool _finalConfirm = false;
   final Map<int, bool> _avoidChecks = {};
-
   // Parse warnings once
   late final List<String> _avoidWarnings;
   late final List<String> _cautionWarnings;

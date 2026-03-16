@@ -14,6 +14,9 @@ class BiometricService {
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
+  /// Tracks if the app has been unlocked via biometrics for the current session
+  static bool isSessionUnlocked = false;
+
   // Storage keys
   static const String _emailKey = 'biometric_email';
   static const String _passwordKey = 'biometric_password';

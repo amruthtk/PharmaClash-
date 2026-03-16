@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'firebase_options.dart';
 import 'screens/registration_screen.dart';
 import 'screens/medical_info_screen.dart';
@@ -8,18 +11,32 @@ import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/caregiver_setup_screen.dart';
+import 'screens/caregiver_notifications_screen.dart';
 import 'services/firebase_service.dart';
 import 'services/notification_service.dart';
+import 'services/biometric_service.dart';
+import 'screens/biometric_lock_screen.dart';
+
 import 'theme/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
+  // Initialize Firebase (required before app starts)
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Initialize Notification Service for dose reminders
-  await NotificationService().initialize();
+  // Enable Firestore offline persistence with larger cache
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
+
+  // Initialize Notification Service in background (non-blocking)
+  NotificationService().initialize();
+
+  // Create Android notification channels for caregiver alerts
+  await _createNotificationChannels();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -28,6 +45,52 @@ void main() async {
     ),
   );
   runApp(const HealthTrackerApp());
+}
+
+/// Create Android notification channels for caregiver emergency alerts.
+/// FCM needs these channels to exist BEFORE a push arrives.
+Future<void> _createNotificationChannels() async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  final androidPlugin = plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+
+  if (androidPlugin != null) {
+    // Emergency channel — max priority, bypasses DND
+    await androidPlugin.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'caregiver_emergency',
+        'Emergency Alerts',
+        description: 'Emergency alerts for severe drug interaction overrides',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+
+    // Standard caregiver channel
+    await androidPlugin.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'caregiver_alerts',
+        'Caregiver Alerts',
+        description: 'Notifications for missed doses and caregiver updates',
+        importance: Importance.high,
+        playSound: true,
+      ),
+    );
+
+    // Nightly missed dose "last call" channel
+    await androidPlugin.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'nightly_dose_check',
+        'Nightly Dose Check',
+        description: 'Nightly reminder to confirm all doses were taken',
+        importance: Importance.high,
+        playSound: true,
+      ),
+    );
+  }
 }
 
 class HealthTrackerApp extends StatelessWidget {
@@ -80,6 +143,9 @@ class HealthTrackerApp extends StatelessWidget {
         '/register': (context) => const RegistrationScreen(),
         '/medical-info': (context) => const MedicalInfoScreen(),
         '/dashboard': (context) => const DashboardScreen(),
+        '/caregiver-setup': (context) => const CaregiverSetupScreen(),
+        '/caregiver-notifications': (context) =>
+            const CaregiverNotificationsScreen(),
       },
     );
   }
@@ -103,11 +169,17 @@ class AuthWrapper extends StatelessWidget {
 
         if (snapshot.hasData) {
           final user = snapshot.data!;
-          // Check if user has a profile in Firestore
-          return FutureBuilder<Map<String, dynamic>?>(
-            future: FirebaseService().getUserProfile(user.uid),
-            builder: (context, profileSnapshot) {
-              if (profileSnapshot.connectionState == ConnectionState.waiting) {
+
+          // Anonymous users stay on the splash screen — they are guests
+          if (user.isAnonymous) {
+            return const SplashScreen();
+          }
+
+          // Check if user has a profile in Firestore AND if biometrics are needed
+          return FutureBuilder<Map<String, dynamic>>(
+            future: _getInitialData(user.uid),
+            builder: (context, dataSnapshot) {
+              if (dataSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(
                     child: CircularProgressIndicator(
@@ -117,36 +189,33 @@ class AuthWrapper extends StatelessWidget {
                 );
               }
 
-              if (profileSnapshot.hasError) {
+              if (dataSnapshot.hasError) {
                 return Scaffold(
-                  body: Center(child: Text('Error: ${profileSnapshot.error}')),
+                  body: Center(child: Text('Error: ${dataSnapshot.error}')),
                 );
               }
 
-              // If no profile found (meaning they just signed up via Google and didn't finish registration)
-              // or if critical fields like phone/DOB are missing
-              final profile = profileSnapshot.data;
+              final profile =
+                  dataSnapshot.data?['profile'] as Map<String, dynamic>?;
+              final isBioEnabled = dataSnapshot.data?['isBioEnabled'] == true;
 
-              // Debug logging
-              debugPrint('=== AUTH WRAPPER DEBUG ===');
-              debugPrint('Profile: $profile');
-              debugPrint('isAdmin value: ${profile?['isAdmin']}');
-              debugPrint('isAdmin type: ${profile?['isAdmin']?.runtimeType}');
-
-              if (profile == null || profile['phone'] == null) {
+              if (profile == null || profile['email'] == null) {
                 return const RegistrationScreen();
+              }
+
+              // ENFORCE BIOMETRIC LOCK
+              // If biometrics enabled but not unlocked for this session, show lock screen
+              if (isBioEnabled && !BiometricService.isSessionUnlocked) {
+                return const BiometricLockScreen();
               }
 
               // Check if user is admin
               final isAdmin = profile['isAdmin'] == true;
-              debugPrint('isAdmin check result: $isAdmin');
 
               if (isAdmin) {
-                debugPrint('>>> Routing to ADMIN DASHBOARD');
                 return const AdminDashboardScreen();
               }
 
-              debugPrint('>>> Routing to USER DASHBOARD');
               return const DashboardScreen();
             },
           );
@@ -155,5 +224,28 @@ class AuthWrapper extends StatelessWidget {
         return const SplashScreen();
       },
     );
+  }
+
+  /// Get both profile and biometric status
+  Future<Map<String, dynamic>> _getInitialData(String uid) async {
+    final profile = await _getProfileFast(uid);
+    final isBioEnabled = await BiometricService().isBiometricEnabled();
+    return {'profile': profile, 'isBioEnabled': isBioEnabled};
+  }
+
+  /// Try cache first for faster profile loading, fallback to server
+  Future<Map<String, dynamic>?> _getProfileFast(String uid) async {
+    try {
+      // Try cache first — instant for returning users
+      final cachedDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get(const GetOptions(source: Source.cache));
+      if (cachedDoc.exists) return cachedDoc.data();
+    } catch (_) {
+      // Cache miss — expected for first-time users
+    }
+    // Fallback to server
+    return FirebaseService().getUserProfile(uid);
   }
 }

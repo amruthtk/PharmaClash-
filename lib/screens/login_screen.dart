@@ -1,9 +1,14 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import '../services/biometric_service.dart';
-import '../widgets/google_icon.dart';
 import '../theme/app_colors.dart';
+import '../widgets/auth/auth_text_field.dart';
+import '../widgets/auth/auth_button.dart';
+import '../widgets/auth/social_auth_button.dart';
+import '../widgets/auth/biometric_auth_button.dart';
+import '../widgets/auth/forgot_password_sheet.dart';
+import '../widgets/auth/login_background.dart';
+import '../widgets/auth/login_header.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,7 +24,6 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
-  bool _rememberMe = false;
   bool _isLoading = false;
   bool _canCheckBiometrics = false;
   bool _isAuthenticating = false;
@@ -83,7 +87,6 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _handleBiometricLogin() async {
     if (_isAuthenticating) return;
 
-    // Check if biometric is enabled
     final isEnabled = await _biometricService.isBiometricEnabled();
     if (!isEnabled) {
       _showInfoSnackBar(
@@ -95,12 +98,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isAuthenticating = true);
 
     try {
-      // Authenticate and get stored credentials
       final credentials = await _biometricService
           .authenticateAndGetCredentials();
 
       if (credentials != null && mounted) {
-        // Perform actual login with stored credentials
         await _firebaseService.signInWithEmailAndPassword(
           email: credentials['email']!,
           password: credentials['password']!,
@@ -163,8 +164,8 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (mounted) {
+        BiometricService.isSessionUnlocked = true;
         _showSuccessSnackBar('Welcome back!');
-        // Go back to root (/) to let AuthWrapper decide (Registration or Dashboard)
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       }
     } catch (e) {
@@ -185,7 +186,6 @@ class _LoginScreenState extends State<LoginScreen>
       final result = await _firebaseService.signInWithGoogle();
       if (result != null && mounted) {
         _showSuccessSnackBar('Signed in with Google!');
-        // Go back to root (/) to let AuthWrapper decide (Registration or Dashboard)
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       }
     } catch (e) {
@@ -234,12 +234,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _handleForgotPassword() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ForgotPasswordSheet(),
-    );
+    ForgotPasswordSheet.show(context);
   }
 
   @override
@@ -248,10 +243,7 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Animated background decorations
-          _buildBackgroundDecorations(),
-
-          // Main content
+          LoginBackground(floatAnimation: _floatController),
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -267,23 +259,17 @@ class _LoginScreenState extends State<LoginScreen>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const SizedBox(height: 20),
-
-                          // Back button
                           Align(
                             alignment: Alignment.centerLeft,
                             child: _buildBackButton(),
                           ),
                           const SizedBox(height: 30),
-
-                          // Header with animated icon
-                          _buildHeader(),
+                          const LoginHeader(),
                           const SizedBox(height: 40),
 
-                          // Email Field
-                          _buildInputLabel('Email Address'),
-                          const SizedBox(height: 8),
-                          _buildTextField(
+                          AuthTextField(
                             controller: _emailController,
+                            label: 'Email Address',
                             hint: 'Enter your email',
                             prefixIcon: Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
@@ -301,11 +287,9 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 20),
 
-                          // Password Field
-                          _buildInputLabel('Password'),
-                          const SizedBox(height: 8),
-                          _buildTextField(
+                          AuthTextField(
                             controller: _passwordController,
+                            label: 'Password',
                             hint: 'Enter your password',
                             prefixIcon: Icons.lock_outline,
                             obscureText: _obscurePassword,
@@ -331,15 +315,13 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 16),
 
-                          // Remember & Forgot Password
                           _buildRememberForgotRow(),
                           const SizedBox(height: 32),
 
-                          // Login Button with Biometric
                           Row(
                             children: [
                               Expanded(
-                                child: _buildPrimaryButton(
+                                child: AuthButton(
                                   label: 'Log In',
                                   onPressed: _isLoading ? null : _handleLogin,
                                   isLoading: _isLoading,
@@ -347,21 +329,25 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               if (_canCheckBiometrics) ...[
                                 const SizedBox(width: 12),
-                                _buildBiometricButton(),
+                                BiometricAuthButton(
+                                  biometricEnabled: _biometricEnabled,
+                                  isAuthenticating: _isAuthenticating,
+                                  onTap: _handleBiometricLogin,
+                                ),
                               ],
                             ],
                           ),
                           const SizedBox(height: 28),
 
-                          // Divider
                           _buildDivider(),
                           const SizedBox(height: 28),
 
-                          // Google Sign In
-                          _buildGoogleButton(),
+                          SocialAuthButton(
+                            onTap: _handleGoogleSignIn,
+                            isLoading: false,
+                          ),
                           const SizedBox(height: 32),
 
-                          // Sign Up Link
                           _buildSignUpLink(),
                           const SizedBox(height: 30),
                         ],
@@ -373,78 +359,6 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBackgroundDecorations() {
-    return ClipRect(
-      child: AnimatedBuilder(
-        animation: _floatController,
-        builder: (context, child) {
-          return Stack(
-            children: [
-              // Top right gradient circle - kept inside viewport
-              Positioned(
-                top: 60 + (math.sin(_floatController.value * math.pi) * 10),
-                right: 30,
-                child: Opacity(
-                  opacity: 0.4,
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [AppColors.lightMint, Colors.transparent],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Bottom left gradient circle
-              Positioned(
-                bottom: 150 + (math.cos(_floatController.value * math.pi) * 15),
-                left: 20,
-                child: Opacity(
-                  opacity: 0.3,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          AppColors.mintGreen.withValues(alpha: 0.25),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Small pill decoration
-              Positioned(
-                top: 180 + (math.sin(_floatController.value * math.pi + 1) * 8),
-                right: 50,
-                child: Opacity(
-                  opacity: 0.1,
-                  child: Transform.rotate(
-                    angle: _floatController.value * 0.2 + 0.3,
-                    child: Container(
-                      width: 35,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryTeal,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
       ),
     );
   }
@@ -473,302 +387,17 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        // Animated Logo
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.8, end: 1.0),
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.elasticOut,
-          builder: (context, value, child) {
-            return Transform.scale(
-              scale: value,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.primaryTeal, AppColors.deepTeal],
-                  ),
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryTeal.withValues(alpha: 0.3),
-                      blurRadius: 25,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.medical_services_rounded,
-                  color: Colors.white,
-                  size: 38,
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 28),
-
-        // Welcome text
-        ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [AppColors.deepTeal, AppColors.primaryTeal],
-          ).createShader(bounds),
-          child: const Text(
-            'Welcome Back',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -0.5,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Sign in to continue your health journey',
-          style: TextStyle(
-            fontSize: 15,
-            color: AppColors.grayText,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInputLabel(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: AppColors.darkText,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData prefixIcon,
-    bool obscureText = false,
-    Widget? suffixIcon,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: const TextStyle(
-        fontSize: 16,
-        color: AppColors.darkText,
-        fontWeight: FontWeight.w500,
-      ),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(
-          color: AppColors.grayText.withValues(alpha: 0.7),
-          fontWeight: FontWeight.w400,
-        ),
-        prefixIcon: Container(
-          margin: const EdgeInsets.only(left: 4),
-          child: Icon(prefixIcon, color: AppColors.grayText, size: 22),
-        ),
-        suffixIcon: suffixIcon,
-        filled: true,
-        fillColor: AppColors.inputBg,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.lightBorderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.lightBorderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.red.shade300, width: 1),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.red.shade400, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
-        ),
-      ),
-    );
-  }
-
   Widget _buildRememberForgotRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: Checkbox(
-                value: _rememberMe,
-                onChanged: (value) =>
-                    setState(() => _rememberMe = value ?? false),
-                activeColor: AppColors.primaryTeal,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Remember me',
-              style: TextStyle(fontSize: 14, color: AppColors.grayText),
-            ),
-          ],
-        ),
-        GestureDetector(
-          onTap: _handleForgotPassword,
-          child: const Text(
-            'Forgot Password?',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.primaryTeal,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPrimaryButton({
-    required String label,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.primaryTeal, AppColors.deepTeal],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryTeal.withValues(alpha: 0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Center(
-            child: isLoading
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBiometricButton() {
-    return Tooltip(
-      message: _biometricEnabled
-          ? 'Login with fingerprint'
-          : 'Set up fingerprint login in Profile after logging in',
+    return Align(
+      alignment: Alignment.centerRight,
       child: GestureDetector(
-        onTap: _isAuthenticating ? null : _handleBiometricLogin,
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            gradient: _biometricEnabled
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.primaryTeal, AppColors.deepTeal],
-                  )
-                : null,
-            color: _biometricEnabled
-                ? null
-                : AppColors.primaryTeal.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
-            border: _biometricEnabled
-                ? null
-                : Border.all(
-                    color: AppColors.primaryTeal.withValues(alpha: 0.3),
-                  ),
-            boxShadow: _biometricEnabled
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryTeal.withValues(alpha: 0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: _isAuthenticating
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : Icon(
-                    Icons.fingerprint,
-                    color: _biometricEnabled
-                        ? Colors.white
-                        : AppColors.primaryTeal,
-                    size: 28,
-                  ),
+        onTap: _handleForgotPassword,
+        child: const Text(
+          'Forgot Password?',
+          style: TextStyle(
+            fontSize: 14,
+            color: AppColors.primaryTeal,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -819,46 +448,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildGoogleButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _isLoading ? null : _handleGoogleSignIn,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.lightBorderColor, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GoogleIcon(size: 22),
-              SizedBox(width: 14),
-              Text(
-                'Continue with Google',
-                style: TextStyle(
-                  color: AppColors.darkText,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSignUpLink() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -879,306 +468,6 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ],
-    );
-  }
-}
-
-// Forgot Password Bottom Sheet
-class _ForgotPasswordSheet extends StatefulWidget {
-  const _ForgotPasswordSheet();
-
-  @override
-  State<_ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
-}
-
-class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
-  final _emailController = TextEditingController();
-  final FirebaseService _firebaseService = FirebaseService();
-  bool _emailSent = false;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendResetLink() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please enter your email'),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      await _firebaseService.sendPasswordResetEmail(email);
-      if (mounted) {
-        setState(() => _emailSent = true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 48,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            if (!_emailSent) ...[
-              // Icon
-              Center(
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primaryTeal.withValues(alpha: 0.1),
-                        AppColors.primaryTeal.withValues(alpha: 0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(
-                    Icons.lock_reset_rounded,
-                    color: AppColors.primaryTeal,
-                    size: 36,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              const Text(
-                'Forgot Password?',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkText,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Enter your email and we\'ll send you a link to reset your password.',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: AppColors.grayText,
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 28),
-
-              // Email input
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  hintText: 'Enter your email',
-                  hintStyle: const TextStyle(color: AppColors.mutedText),
-                  prefixIcon: const Icon(
-                    Icons.email_outlined,
-                    color: AppColors.grayText,
-                    size: 22,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.inputBg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: AppColors.lightBorderColor,
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: AppColors.lightBorderColor,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: AppColors.primaryTeal,
-                      width: 2,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 18,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Send button
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _isLoading ? null : _sendResetLink,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.primaryTeal, AppColors.deepTeal],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryTeal.withValues(alpha: 0.35),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              'Send Reset Link',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-            ] else ...[
-              // Success state
-              Center(
-                child: Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.accentGreen.withValues(alpha: 0.15),
-                        AppColors.accentGreen.withValues(alpha: 0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: AppColors.accentGreen,
-                    size: 48,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              const Text(
-                'Email Sent!',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkText,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'We\'ve sent a password reset link to\n${_emailController.text}',
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: AppColors.grayText,
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 28),
-
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.pop(context),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.primaryTeal, AppColors.deepTeal],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Back to Login',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
     );
   }
 }

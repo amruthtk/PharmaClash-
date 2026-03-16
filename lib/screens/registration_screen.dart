@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firebase_service.dart';
+import '../services/biometric_service.dart';
+import '../services/telemetry_service.dart';
 import '../theme/app_colors.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -15,7 +17,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -23,6 +24,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   DateTime? _selectedDate;
   String? _selectedGender;
   bool _agreedToTerms = false;
+  bool _hasReadDisclaimer = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -82,7 +84,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   @override
   void dispose() {
     _fullNameController.dispose();
-    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -140,7 +141,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     }
 
     if (!_agreedToTerms) {
-      _showSnackBar('Please agree to the terms and conditions', isError: true);
+      _showSnackBar(
+        'Please read and accept the Medical Disclaimer',
+        isError: true,
+      );
       return;
     }
 
@@ -154,35 +158,39 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         );
 
         if (credential.user != null) {
-          await _firebaseService.saveUserProfile(
-            uid: credential.user!.uid,
-            email: _emailController.text.trim(),
-            fullName: _fullNameController.text.trim(),
-            phone: _phoneController.text.trim(),
-            dateOfBirth: _selectedDate,
-            gender: _selectedGender,
-          );
-
-          await _firebaseService.updateDisplayName(
-            _fullNameController.text.trim(),
-          );
+          await Future.wait([
+            _firebaseService.saveUserProfile(
+              uid: credential.user!.uid,
+              email: _emailController.text.trim(),
+              fullName: _fullNameController.text.trim(),
+              dateOfBirth: _selectedDate,
+              gender: _selectedGender,
+            ),
+            _firebaseService.updateDisplayName(_fullNameController.text.trim()),
+          ]);
         }
       } else {
         final user = _firebaseService.currentUser!;
-        await _firebaseService.saveUserProfile(
-          uid: user.uid,
-          email: _emailController.text.trim(),
-          fullName: _fullNameController.text.trim(),
-          phone: _phoneController.text.trim(),
-          dateOfBirth: _selectedDate,
-          gender: _selectedGender,
-        );
-        await _firebaseService.updateDisplayName(
-          _fullNameController.text.trim(),
-        );
+        await Future.wait([
+          _firebaseService.saveUserProfile(
+            uid: user.uid,
+            email: _emailController.text.trim(),
+            fullName: _fullNameController.text.trim(),
+            dateOfBirth: _selectedDate,
+            gender: _selectedGender,
+          ),
+          _firebaseService.updateDisplayName(_fullNameController.text.trim()),
+        ]);
       }
 
       if (mounted) {
+        // Log registration success for conversion funnel
+        TelemetryService().logEvent(
+          'registration_success',
+          details: 'Guest successfully registered as a patient.',
+        );
+
+        BiometricService.isSessionUnlocked = true;
         _showSnackBar('Registration successful!');
         Navigator.pushReplacementNamed(context, '/medical-info');
       }
@@ -214,6 +222,159 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
+    );
+  }
+
+  void _showDisclaimerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+        child: Column(
+          children: [
+            Container(
+              width: 45,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Text(
+                  'Medical Disclaimer',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.darkText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDisclaimerBullet(
+                      'Information Accuracy',
+                      'The information provided by PharmaClash is for reference only and is NOT 100% accurate. AI-powered scanning and database results may contain errors.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDisclaimerBullet(
+                      'Not a Doctor Replacement',
+                      'This application is NOT a substitute for professional medical advice, diagnosis, or treatment by a qualified doctor.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDisclaimerBullet(
+                      'Prescription Changes',
+                      'Never change your medication, dosage, or start new drugs based solely on this app without explicit consent from your doctor.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDisclaimerBullet(
+                      'Emergency Situations',
+                      'If you are experiencing a medical emergency, call your local emergency services or visit a hospital immediately.',
+                    ),
+                    const Divider(height: 40),
+                    const Text(
+                      'Acknowledgement',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkText,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'By accepting this disclaimer, you understand and acknowledge that the doctor is the final authority for your health decisions.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.grayText,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _hasReadDisclaimer = true;
+                    _agreedToTerms = true; // Auto-check if they click accept
+                  });
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryTeal,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'I Understand & Accept',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDisclaimerBullet(String title, String content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryTeal,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          content,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.darkText,
+            height: 1.5,
+          ),
+        ),
+      ],
     );
   }
 
@@ -294,32 +455,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 18),
-
-                          _buildInputLabel('Phone Number'),
-                          const SizedBox(height: 8),
-                          _buildTextField(
-                            controller: _phoneController,
-                            hint: '10-digit phone number',
-                            prefixIcon: Icons.phone_outlined,
-                            keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(10),
-                            ],
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter your phone number';
-                              }
-                              if (value.length != 10) {
-                                return 'Must be 10 digits';
-                              }
-                              if (!RegExp(r'^[6-9]\d{9}$').hasMatch(value)) {
-                                return 'Enter valid Indian number';
-                              }
-                              return null;
-                            },
                           ),
                           const SizedBox(height: 18),
 
@@ -412,7 +547,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                             const SizedBox(height: 18),
                           ],
 
-                          // Terms Checkbox
+                          // Medical Disclaimer Checkbox
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -422,6 +557,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                                 child: Checkbox(
                                   value: _agreedToTerms,
                                   onChanged: (value) {
+                                    if (!_hasReadDisclaimer) {
+                                      _showDisclaimerSheet();
+                                      return;
+                                    }
                                     setState(
                                       () => _agreedToTerms = value ?? false,
                                     );
@@ -434,30 +573,31 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: RichText(
-                                  text: TextSpan(
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: AppColors.grayText,
+                                child: GestureDetector(
+                                  onTap: _showDisclaimerSheet,
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.grayText,
+                                        height: 1.4,
+                                      ),
+                                      children: [
+                                        const TextSpan(
+                                          text:
+                                              'I acknowledge and agree to the ',
+                                        ),
+                                        TextSpan(
+                                          text: 'Medical Disclaimer',
+                                          style: TextStyle(
+                                            color: AppColors.primaryTeal,
+                                            fontWeight: FontWeight.bold,
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    children: [
-                                      const TextSpan(text: 'I agree to the '),
-                                      TextSpan(
-                                        text: 'Terms of Service',
-                                        style: TextStyle(
-                                          color: AppColors.primaryTeal,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const TextSpan(text: ' and '),
-                                      TextSpan(
-                                        text: 'Privacy Policy',
-                                        style: TextStyle(
-                                          color: AppColors.primaryTeal,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ),

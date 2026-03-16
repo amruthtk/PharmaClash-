@@ -6,7 +6,7 @@ import 'package:pharmaclash/models/medical_reference_data.dart';
 /// Sprint 1 Test Cases for PharmaClash
 ///
 /// TC_S1_01: Verify user registration with valid details
-/// TC_S1_02: Verify chronic condition input for safety checks
+/// TC_S1_02: Verify health condition input for safety checks
 /// TC_S1_03: Verify patient allergy capture
 /// TC_S1_04: Verify caregiver contact for emergency
 
@@ -122,29 +122,29 @@ void main() {
 
       expect(userData['fullName'], isNotEmpty);
       expect(userData['email'], isNotEmpty);
-      expect(userData['phone'], isNotEmpty);
+      expect(userData['email'], isNotEmpty);
       expect(userData['dateOfBirth'], isA<DateTime>());
       expect(userData['gender'], isNotNull);
     });
   });
 
   // ============================================================================
-  // TC_S1_02: Verify chronic condition input for safety checks
+  // TC_S1_02: Verify health condition input for safety checks
   // Input Data: Diabetes, Hypertension
   // Expected Result: Conditions should be saved to profile
   // ============================================================================
-  group('TC_S1_02: Chronic Condition Input Tests', () {
-    test('Should validate Diabetes as a known chronic condition', () {
+  group('TC_S1_02: Health Condition Input Tests', () {
+    test('Should validate Diabetes as a known health condition', () {
       final condition = 'Diabetes Type 2';
-      final isValid = MedicalReferenceData.isValidChronicDisease(condition);
+      final isValid = MedicalReferenceData.isValidHealthCondition(condition);
 
       expect(isValid, true);
     });
 
-    test('Should validate Hypertension as a known chronic condition', () {
+    test('Should validate Hypertension as a known health condition', () {
       // Reference data uses 'Hypertension (High Blood Pressure)'
       // Using search to find conditions containing 'Hypertension'
-      final results = MedicalReferenceData.searchChronicDiseases(
+      final results = MedicalReferenceData.searchHealthConditions(
         'Hypertension',
       );
 
@@ -155,15 +155,15 @@ void main() {
       );
     });
 
-    test('Should search chronic conditions correctly', () {
-      final results = MedicalReferenceData.searchChronicDiseases('Diabetes');
+    test('Should search health conditions correctly', () {
+      final results = MedicalReferenceData.searchHealthConditions('Diabetes');
 
       expect(results.isNotEmpty, true);
       expect(results.any((c) => c.toLowerCase().contains('diabetes')), true);
     });
 
     test('Should search Hypertension correctly', () {
-      final results = MedicalReferenceData.searchChronicDiseases(
+      final results = MedicalReferenceData.searchHealthConditions(
         'Hypertension',
       );
 
@@ -175,12 +175,12 @@ void main() {
     });
 
     test('Should return all conditions when search is empty', () {
-      final allConditions = MedicalReferenceData.searchChronicDiseases('');
+      final allConditions = MedicalReferenceData.searchHealthConditions('');
 
       expect(allConditions.isNotEmpty, true);
       expect(
         allConditions.length,
-        equals(MedicalReferenceData.chronicDiseases.length),
+        equals(MedicalReferenceData.healthConditions.length),
       );
     });
 
@@ -192,7 +192,7 @@ void main() {
       expect(selectedConditions.contains('Hypertension'), true);
     });
 
-    test('Chronic conditions should be saved to medical data structure', () {
+    test('Health conditions should be saved to medical data structure', () {
       final medicalData = {
         'chronicConditions': ['Diabetes Type 2', 'Hypertension'],
         'profileCompleted': true,
@@ -216,7 +216,7 @@ void main() {
 
       for (final disease in quickSelectDiseases) {
         expect(
-          MedicalReferenceData.chronicDiseases.any(
+          MedicalReferenceData.healthConditions.any(
             (d) => d.toLowerCase().contains(
               disease.toLowerCase().split(' ').first,
             ),
@@ -323,7 +323,7 @@ void main() {
 
   // ============================================================================
   // TC_S1_04: Verify caregiver contact for emergency
-  // Input Data: Name, Phone number
+  // Input Data: Name, Email
   // Expected Result: Caregiver details saved for notifications
   // ============================================================================
   group('TC_S1_04: Caregiver Contact Tests', () {
@@ -334,38 +334,38 @@ void main() {
       expect(caregiverName.trim().isNotEmpty, true);
     });
 
-    test('Valid 10-digit caregiver phone should pass validation', () {
-      final phone = '9876543210';
+    test('Valid caregiver email should pass validation', () {
+      final email = 'caregiver@example.com';
+      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
 
-      expect(phone.length, 10);
-      expect(RegExp(r'^\d{10}$').hasMatch(phone), true);
+      expect(emailRegex.hasMatch(email), true);
     });
 
-    test('Invalid caregiver phone should fail validation', () {
-      final invalidPhones = ['12345', '12345678901', 'abcdefghij'];
+    test('Invalid caregiver email should fail validation', () {
+      final invalidEmails = ['plainaddress', '@missing.com', 'user@.com'];
 
-      for (final phone in invalidPhones) {
-        final isValid =
-            phone.length == 10 && RegExp(r'^\d{10}$').hasMatch(phone);
-        expect(isValid, false, reason: 'Phone "$phone" should be invalid');
+      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+
+      for (final email in invalidEmails) {
+        expect(emailRegex.hasMatch(email), false);
       }
     });
 
     test('Caregiver contact should be saved to medical data', () {
       final medicalData = {
         'caregiverName': 'Jane Doe',
-        'caregiverPhone': '9876543210',
+        'caregiverEmail': 'jane.doe@example.com',
         'profileCompleted': true,
       };
 
       expect(medicalData['caregiverName'], 'Jane Doe');
-      expect(medicalData['caregiverPhone'], '9876543210');
+      expect(medicalData['caregiverEmail'], 'jane.doe@example.com');
     });
 
     test('Empty caregiver fields should be optional (allowed)', () {
       final medicalData = {
         'caregiverName': '',
-        'caregiverPhone': '',
+        'caregiverEmail': '',
         'allergies': <String>[],
         'chronicConditions': <String>[],
         'profileCompleted': true,
@@ -378,41 +378,41 @@ void main() {
     test('Caregiver info should be retrievable from medical data', () {
       final medicalInfo = {
         'caregiverName': 'Jane Doe',
-        'caregiverPhone': '9876543210',
+        'caregiverEmail': 'jane.doe@example.com',
       };
 
       String getCaregiverName(Map<String, dynamic>? info) {
         return info?['caregiverName'] ?? '';
       }
 
-      String getCaregiverPhone(Map<String, dynamic>? info) {
-        return info?['caregiverPhone'] ?? '';
+      String getCaregiverEmail(Map<String, dynamic>? info) {
+        return info?['caregiverEmail'] ?? '';
       }
 
       expect(getCaregiverName(medicalInfo), 'Jane Doe');
-      expect(getCaregiverPhone(medicalInfo), '9876543210');
+      expect(getCaregiverEmail(medicalInfo), 'jane.doe@example.com');
     });
 
     test('Should check if caregiver is configured', () {
       bool hasCaregiverConfigured(Map<String, dynamic>? info) {
         if (info == null) return false;
         final name = info['caregiverName'] as String?;
-        final phone = info['caregiverPhone'] as String?;
+        final email = info['caregiverEmail'] as String?;
         return name != null &&
             name.isNotEmpty &&
-            phone != null &&
-            phone.isNotEmpty;
+            email != null &&
+            email.isNotEmpty;
       }
 
       // With caregiver info
       final withCaregiver = {
         'caregiverName': 'Jane Doe',
-        'caregiverPhone': '9876543210',
+        'caregiverEmail': 'jane.doe@example.com',
       };
       expect(hasCaregiverConfigured(withCaregiver), true);
 
       // Without caregiver info
-      final withoutCaregiver = {'caregiverName': '', 'caregiverPhone': ''};
+      final withoutCaregiver = {'caregiverName': '', 'caregiverEmail': ''};
       expect(hasCaregiverConfigured(withoutCaregiver), false);
 
       // Null case
@@ -424,14 +424,13 @@ void main() {
         'allergies': ['Penicillin', 'Aspirin'],
         'chronicConditions': ['Diabetes Type 2', 'Hypertension'],
         'caregiverName': 'Jane Doe',
-        'caregiverPhone': '9876543210',
+        'caregiverEmail': 'jane.doe@example.com',
         'profileCompleted': true,
       };
 
       expect(completeProfile['allergies'], isA<List>());
       expect(completeProfile['chronicConditions'], isA<List>());
-      expect(completeProfile['caregiverName'], isNotEmpty);
-      expect(completeProfile['caregiverPhone'], isNotEmpty);
+      expect(completeProfile['caregiverEmail'], isNotEmpty);
       expect(completeProfile['profileCompleted'], true);
     });
   });
@@ -445,7 +444,6 @@ void main() {
       final userProfile = {
         'fullName': 'John Doe',
         'email': 'john.doe@example.com',
-        'phone': '9876543210',
         'dateOfBirth': DateTime(1990, 5, 15),
         'gender': 'Male',
       };
@@ -455,20 +453,18 @@ void main() {
         'allergies': ['Penicillin', 'Aspirin'],
         'chronicConditions': ['Diabetes Type 2', 'Hypertension'],
         'caregiverName': 'Jane Doe',
-        'caregiverPhone': '9012345678',
+        'caregiverEmail': 'jane.doe@example.com',
         'profileCompleted': true,
       };
 
       // Validate user profile
-      expect(userProfile['fullName'], isNotEmpty);
       expect(userProfile['email'], isNotEmpty);
-      expect(userProfile['phone'], isNotEmpty);
 
       // Validate medical info
       expect((medicalInfo['allergies'] as List).length, 2);
       expect((medicalInfo['chronicConditions'] as List).length, 2);
       expect(medicalInfo['caregiverName'], isNotEmpty);
-      expect(medicalInfo['caregiverPhone'], isNotEmpty);
+      expect(medicalInfo['caregiverEmail'], isNotEmpty);
       expect(medicalInfo['profileCompleted'], true);
     });
   });

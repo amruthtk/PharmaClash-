@@ -43,6 +43,7 @@ class _TakeDoseSheetState extends State<TakeDoseSheet> {
   int _selectedQuantity = 1;
   String? _selectedTime;
   bool _dietaryConfirmed = false; // For pre-dose dietary confirmation
+  final Map<int, bool> _avoidChecks = {}; // Per-avoid-item checkboxes
 
   @override
   void initState() {
@@ -437,97 +438,231 @@ class _TakeDoseSheetState extends State<TakeDoseSheet> {
           ),
           const SizedBox(height: 24),
 
-          // Dietary Warnings Confirmation (US-15)
+          // Dietary Warnings Confirmation (US-16)
           if (widget.medicine.foodWarnings.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.restaurant_menu,
-                        color: Colors.orange.shade700,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Dietary Guidelines',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.orange.shade800,
+            Builder(
+              builder: (context) {
+                // Parse warnings by severity
+                final avoidWarnings = <String>[];
+                final cautionWarnings = <String>[];
+                for (final raw in widget.medicine.foodWarnings) {
+                  final match = RegExp(r'^\[(\w+)\]\s*(.+)$').firstMatch(raw);
+                  if (match != null) {
+                    final severity = match.group(1)!.toLowerCase();
+                    final text = match.group(2)!;
+                    if (severity == 'avoid') {
+                      avoidWarnings.add(text);
+                    } else {
+                      cautionWarnings.add(text);
+                    }
+                  } else {
+                    cautionWarnings.add(raw);
+                  }
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── AVOID items (red, with individual checkboxes) ──
+                    if (avoidWarnings.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDC2626),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    '⛔ AVOID',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Severe Interactions',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ...avoidWarnings.asMap().entries.map((entry) {
+                              final idx = entry.key;
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: idx < avoidWarnings.length - 1
+                                      ? 8
+                                      : 0,
+                                ),
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      // Toggle this avoid checkbox
+                                      _avoidChecks[idx] =
+                                          !(_avoidChecks[idx] ?? false);
+                                    });
+                                  },
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      _buildSeverityCheckbox(
+                                        _avoidChecks[idx] ?? false,
+                                        severe: true,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'I have NOT consumed ${entry.value.split(':').first.trim()}',
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFFDC2626),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 10),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  ...widget.medicine.foodWarnings.map(
-                    (warning) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            size: 16,
-                            color: Colors.orange.shade600,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              warning,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.orange.shade900,
+
+                    // ── CAUTION items (orange, info only — no checkbox) ──
+                    if (cautionWarnings.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  color: Colors.orange.shade700,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Caution',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.orange.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            ...cautionWarnings.map(
+                              (warning) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '• ',
+                                      style: TextStyle(
+                                        color: Colors.orange.shade700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        warning,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.orange.shade900,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // ── Final "I confirm" checkbox ──
+                    InkWell(
+                      onTap: () => setState(
+                        () => _dietaryConfirmed = !_dietaryConfirmed,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _dietaryConfirmed
+                              ? AppColors.accentGreen.withOpacity(0.1)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _dietaryConfirmed
+                                ? AppColors.accentGreen.withOpacity(0.4)
+                                : Colors.grey.shade300,
                           ),
-                        ],
+                        ),
+                        child: Row(
+                          children: [
+                            _buildSeverityCheckbox(_dietaryConfirmed),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'I confirm I have followed all dietary guidelines',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _dietaryConfirmed
+                                      ? AppColors.darkText
+                                      : AppColors.grayText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  InkWell(
-                    onTap: () =>
-                        setState(() => _dietaryConfirmed = !_dietaryConfirmed),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: Checkbox(
-                            value: _dietaryConfirmed,
-                            onChanged: (v) =>
-                                setState(() => _dietaryConfirmed = v ?? false),
-                            activeColor: AppColors.accentGreen,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'I confirm I have followed these dietary guidelines',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.orange.shade900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
           ],
@@ -585,11 +720,43 @@ class _TakeDoseSheetState extends State<TakeDoseSheet> {
         _isTimeLogged(_selectedTime!)) {
       return false;
     }
-    // Can't confirm if dietary warnings exist but not confirmed (US-15)
-    if (widget.medicine.foodWarnings.isNotEmpty && !_dietaryConfirmed) {
-      return false;
+    // Can't confirm if dietary warnings exist but not confirmed
+    if (widget.medicine.foodWarnings.isNotEmpty) {
+      if (!_dietaryConfirmed) return false;
+      // Check all avoid checkboxes are ticked
+      final avoidCount = widget.medicine.foodWarnings
+          .where((w) => RegExp(r'^\[avoid\]', caseSensitive: false).hasMatch(w))
+          .length;
+      for (int i = 0; i < avoidCount; i++) {
+        if (!(_avoidChecks[i] ?? false)) return false;
+      }
     }
     return true;
+  }
+
+  /// Custom checkbox widget with severity styling
+  Widget _buildSeverityCheckbox(bool checked, {bool severe = false}) {
+    final checkColor = severe && !checked
+        ? const Color(0xFFDC2626)
+        : (checked ? AppColors.accentGreen : Colors.grey.withOpacity(0.4));
+
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: checked
+            ? (severe ? const Color(0xFFDC2626) : AppColors.accentGreen)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: checked ? Colors.transparent : checkColor,
+          width: 2,
+        ),
+      ),
+      child: checked
+          ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+          : null,
+    );
   }
 
   /// Get appropriate button text

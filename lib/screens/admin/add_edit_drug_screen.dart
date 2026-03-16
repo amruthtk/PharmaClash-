@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/drug_model.dart';
 import '../../services/drug_service.dart';
+import '../../services/admin_analytics_service.dart';
 import '../../theme/app_colors.dart';
 
 /// Add/Edit Drug Screen
@@ -108,15 +109,21 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
         createdAt: widget.drug?.createdAt,
       );
 
+      String? targetId = widget.drug?.id;
       bool success;
       if (_isEditing) {
         success = await _drugService.updateDrug(drug);
       } else {
-        final id = await _drugService.addDrug(drug);
-        success = id != null;
+        targetId = await _drugService.addDrug(drug);
+        success = targetId != null;
       }
 
       if (success && mounted) {
+        await AdminAnalyticsService().logAdminAction(
+          action: _isEditing ? 'Updated drug' : 'Added drug',
+          details: _genericNameController.text.trim(),
+          targetId: targetId,
+        );
         _showSnackBar(
           _isEditing ? 'Drug updated successfully' : 'Drug added successfully',
         );
@@ -155,7 +162,10 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
         ),
         title: Text(
           _isEditing ? 'Edit Drug' : 'Add New Drug',
-          style: TextStyle(color: AppColors.lightText, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: AppColors.lightText,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           if (_isLoading)
@@ -306,7 +316,10 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
                     .map(
                       (cat) => PopupMenuItem(
                         value: cat,
-                        child: Text(cat, style: TextStyle(color: AppColors.lightText)),
+                        child: Text(
+                          cat,
+                          style: TextStyle(color: AppColors.lightText),
+                        ),
                       ),
                     )
                     .toList(),
@@ -393,7 +406,10 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
                   .map(
                     (w) => Chip(
                       label: Text(w),
-                      labelStyle: TextStyle(color: AppColors.lightText, fontSize: 12),
+                      labelStyle: TextStyle(
+                        color: AppColors.lightText,
+                        fontSize: 12,
+                      ),
                       backgroundColor: color.withValues(alpha: 0.2),
                       deleteIcon: Icon(Icons.close, size: 16, color: color),
                       onDeleted: () {
@@ -595,7 +611,10 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: AppColors.mutedText)),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.mutedText),
+              ),
             ),
             ElevatedButton(
               onPressed: () {
@@ -775,7 +794,10 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: AppColors.mutedText)),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.mutedText),
+              ),
             ),
             ElevatedButton(
               onPressed: () {
@@ -914,4 +936,3 @@ class _AddEditDrugScreenState extends State<AddEditDrugScreen> {
     );
   }
 }
-

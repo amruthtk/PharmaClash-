@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
+import '../../models/drug_model.dart';
 import '../../services/firebase_service.dart';
 import '../../services/drug_service.dart';
+import '../../services/admin_analytics_service.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/admin/admin_stat_card.dart';
+import '../../widgets/admin/risk_donut_chart.dart';
+import '../../widgets/admin/admin_activity_tile.dart';
 import 'drug_list_screen.dart';
 import 'add_edit_drug_screen.dart';
 import 'data_migration_screen.dart';
-import '../../theme/app_colors.dart';
+import 'interaction_rules_screen.dart';
+import 'admin_audit_logs_screen.dart';
+import 'guest_telemetry_logs_screen.dart';
+import '../../widgets/admin/admin_funnel_chart.dart';
 
-/// Admin Dashboard Screen
-/// Main hub for admin operations
+/// Admin Dashboard Screen — actionable insights hub.
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -18,13 +26,29 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   final DrugService _drugService = DrugService();
+  final AdminAnalyticsService _analytics = AdminAnalyticsService();
+
+  // Stats
+  List<DrugModel> _drugs = [];
   int _drugCount = 0;
   int _categoryCount = 0;
+  int _userCount = 0;
+  int _ruleCount = 0;
+  Map<String, int> _riskDistribution = {'severe': 0, 'moderate': 0, 'mild': 0};
+
+  // Recent activity
+  List<Map<String, dynamic>> _recentLogs = [];
+  List<Map<String, dynamic>> _recentGuestLogs = [];
+
+  // Guest Stats
+  Map<String, int> _funnelData = {'installs': 0, 'interactions': 0, 'patients': 0};
+  List<Map<String, dynamic>> _topGuestChecks = [];
+  double _guestScanSuccessRate = 0.0;
+  bool _showGuestInsights = false;
+
   bool _isLoading = true;
 
   late AnimationController _animationController;
-
-  // Theme colors
 
   @override
   void initState() {
@@ -33,7 +57,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _loadStats();
+    _loadAll();
   }
 
   @override
@@ -42,25 +66,51 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     super.dispose();
   }
 
-  Future<void> _loadStats() async {
+  Future<void> _loadAll() async {
     setState(() => _isLoading = true);
 
     try {
+      // Core data — these are critical
       final drugs = await _drugService.getAllDrugs(forceRefresh: true);
       final categories = await _drugService.getCategories();
+      final userCount = await _analytics.getTotalUsers();
+
+      List<Map<String, dynamic>> recentLogs = [];
+      try { recentLogs = await _analytics.getRecentAdminLogs(limit: 5); } catch (e) { debugPrint('Dashboard: recentLogs error: $e'); }
+
+      // Guest analytics — each is independent, one failing shouldn't block others
+      Map<String, int> funnelData = {'installs': 0, 'interactions': 0, 'patients': 0};
+      try { funnelData = await _analytics.getFunnelData(); } catch (e) { debugPrint('Dashboard: funnelData error: $e'); }
+
+      List<Map<String, dynamic>> topGuestChecks = [];
+      try { topGuestChecks = await _analytics.getTopGuestInteractions(); } catch (e) { debugPrint('Dashboard: topGuestChecks error: $e'); }
+
+      Map<String, double> perfStats = {'successRate': 0.0};
+      try { perfStats = await _analytics.getGuestPerformanceStats(); } catch (e) { debugPrint('Dashboard: perfStats error: $e'); }
+
+      List<Map<String, dynamic>> recentGuestLogs = [];
+      try { recentGuestLogs = await _analytics.getRecentGuestTelemetry(limit: 5); } catch (e) { debugPrint('Dashboard: recentGuestLogs error: $e'); }
 
       if (mounted) {
         setState(() {
+          _drugs = drugs;
           _drugCount = drugs.length;
           _categoryCount = categories.length;
+          _userCount = userCount;
+          _ruleCount = _analytics.getInteractionRuleCount(drugs);
+          _riskDistribution = _analytics.getRiskDistribution(drugs);
+          _recentLogs = recentLogs;
+          _funnelData = funnelData;
+          _topGuestChecks = topGuestChecks;
+          _guestScanSuccessRate = perfStats['successRate'] ?? 0.0;
+          _recentGuestLogs = recentGuestLogs;
           _isLoading = false;
         });
-        _animationController.forward();
+        _animationController.forward(from: 0);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      debugPrint('Dashboard load error: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -83,7 +133,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ElevatedButton(
             onPressed: () async {
               final navigator = Navigator.of(context);
-              navigator.pop(); // Close dialog
+              navigator.pop();
               await FirebaseService().signOut();
               if (mounted) {
                 navigator.pushNamedAndRemoveUntil('/splash', (route) => false);
@@ -98,6 +148,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       ),
     );
   }
+
+  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
@@ -121,16 +173,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
             ),
             const SizedBox(width: 12),
-            Text(
-              'Admin Dashboard',
-              style: TextStyle(color: AppColors.lightText, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                'Admin Dashboard',
+                style: TextStyle(
+                  color: AppColors.lightText,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh_rounded, color: AppColors.mutedText),
-            onPressed: _loadStats,
+            onPressed: _loadAll,
             tooltip: 'Refresh',
           ),
           IconButton(
@@ -141,9 +199,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: AppColors.primaryTeal))
+          ? Center(
+              child: CircularProgressIndicator(color: AppColors.primaryTeal),
+            )
           : RefreshIndicator(
-              onRefresh: _loadStats,
+              onRefresh: _loadAll,
               color: AppColors.primaryTeal,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -152,12 +212,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildWelcomeCard(),
-                    const SizedBox(height: 24),
-                    _buildStatsRow(),
-                    const SizedBox(height: 32),
-                    _buildSectionTitle('Quick Actions', Icons.flash_on_rounded),
-                    const SizedBox(height: 16),
-                    _buildQuickActions(),
+                    const SizedBox(height: 20),
+                    _buildModeToggle(),
+                    const SizedBox(height: 20),
+                    if (!_showGuestInsights) ...[
+                      _buildStatsGrid(),
+                      const SizedBox(height: 20),
+                      RiskDonutChart(
+                        severe: _riskDistribution['severe'] ?? 0,
+                        moderate: _riskDistribution['moderate'] ?? 0,
+                        mild: _riskDistribution['mild'] ?? 0,
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Quick Actions', Icons.flash_on_rounded),
+                      const SizedBox(height: 12),
+                      _buildQuickActions(),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildSectionTitle(
+                            'Recent Activity',
+                            Icons.history_rounded,
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AdminAuditLogsScreen(),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              'See All',
+                              style: TextStyle(
+                                color: AppColors.primaryTeal,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _buildRecentActivity(),
+                    ] else ...[
+                      _buildGuestInsights(),
+                    ],
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -165,6 +266,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ),
     );
   }
+
+  // ==================== SECTIONS ====================
 
   Widget _buildWelcomeCard() {
     return Container(
@@ -200,7 +303,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Manage your drug database, add new medicines, and configure interactions.',
+                  'Manage drugs, interaction rules, and monitor system analytics.',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.white.withValues(alpha: 0.8),
@@ -227,82 +330,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildStatsRow() {
-    return Row(
+  Widget _buildStatsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio:
+          1.0, // More vertical space for stats cards to prevent overflow
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
-        Expanded(
-          child: _buildStatCard(
-            'Total Drugs',
-            _drugCount.toString(),
-            Icons.medication_rounded,
-            AppColors.mintGreen,
-          ),
+        AdminStatCard(
+          label: 'Total Drugs',
+          value: '$_drugCount',
+          icon: Icons.medication_rounded,
+          color: AppColors.mintGreen,
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            'Categories',
-            _categoryCount.toString(),
-            Icons.category_rounded,
-            Colors.amber,
-          ),
+        AdminStatCard(
+          label: 'Categories',
+          value: '$_categoryCount',
+          icon: Icons.category_rounded,
+          color: Colors.amber,
         ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: AppColors.lightText,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.mintGreen, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppColors.lightText,
-          ),
+        AdminStatCard(
+          label: 'Users',
+          value: '$_userCount',
+          icon: Icons.people_rounded,
+          color: Colors.blue,
+        ),
+        AdminStatCard(
+          label: 'Interaction Rules',
+          value: '$_ruleCount',
+          icon: Icons.compare_arrows_rounded,
+          color: Colors.red.shade400,
+          subtitle: '${_riskDistribution['severe'] ?? 0} severe',
         ),
       ],
     );
@@ -325,7 +386,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       builder: (_) => const AddEditDrugScreen(),
                     ),
                   );
-                  _loadStats();
+                  _loadAll();
                 },
               ),
             ),
@@ -340,7 +401,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     context,
                     MaterialPageRoute(builder: (_) => const DrugListScreen()),
                   );
-                  _loadStats();
+                  _loadAll();
                 },
               ),
             ),
@@ -351,9 +412,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             Expanded(
               child: _buildActionButton(
+                'Manage Rules',
+                Icons.compare_arrows_rounded,
+                Colors.orange,
+                () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => InteractionRulesScreen(drugs: _drugs),
+                    ),
+                  );
+                  _loadAll();
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
                 'Import Data',
                 Icons.cloud_upload_rounded,
-                Colors.purple,
+                Colors.teal.shade300,
                 () async {
                   await Navigator.push(
                     context,
@@ -361,20 +439,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       builder: (_) => const DataMigrationScreen(),
                     ),
                   );
-                  _loadStats();
+                  _loadAll();
                 },
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionButton(
-                'Refresh',
-                Icons.sync_rounded,
-                Colors.orange,
-                _loadStats,
-              ),
-            ),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentActivity() {
+    if (_recentLogs.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderColor),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.history, color: AppColors.mutedText, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                'No recent activity',
+                style: TextStyle(color: AppColors.mutedText, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: _recentLogs.map((log) => AdminActivityTile(log: log)).toList(),
+    );
+  }
+
+  // ==================== HELPERS ====================
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.mintGreen, size: 20),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.lightText,
+          ),
         ),
       ],
     );
@@ -413,5 +530,205 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       ),
     );
   }
-}
 
+  Widget _buildModeToggle() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildToggleItem(
+              'System Overview',
+              Icons.dashboard_rounded,
+              !_showGuestInsights,
+              () => setState(() => _showGuestInsights = false),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildToggleItem(
+              'Guest Insights',
+              Icons.analytics_rounded,
+              _showGuestInsights,
+              () => setState(() => _showGuestInsights = true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleItem(
+    String label,
+    IconData icon,
+    bool isActive,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(11),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primaryTeal : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? Colors.white : AppColors.mutedText,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: isActive ? Colors.white : AppColors.mutedText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuestInsights() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Acquisition Funnel', Icons.filter_alt_rounded),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.borderColor),
+          ),
+          child: AdminFunnelChart(
+            installs: _funnelData['installs'] ?? 0,
+            interactions: _funnelData['interactions'] ?? 0,
+            patients: _funnelData['patients'] ?? 0,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: AdminStatCard(
+                label: 'Guest Scan Success',
+                value: '${_guestScanSuccessRate.toStringAsFixed(1)}%',
+                icon: Icons.camera_alt_rounded,
+                color: AppColors.mintGreen,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AdminStatCard(
+                label: 'Guest Checks',
+                value: '${_funnelData['interactions']}',
+                icon: Icons.search_rounded,
+                color: Colors.blue,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _buildSectionTitle('Risk Heatmap (Top Guest Checks)', Icons.local_fire_department_rounded),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.borderColor),
+          ),
+          child: _topGuestChecks.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('No guest interaction check data yet.', style: TextStyle(color: AppColors.mutedText)),
+                  ),
+                )
+              : Column(
+                  children: _topGuestChecks.map((check) {
+                    final label = check['label'] as String;
+                    final count = check['count'] as int;
+                    final maxCount = _topGuestChecks.first['count'] as int;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                              Text('$count checks', style: const TextStyle(color: AppColors.primaryTeal, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: count / maxCount,
+                              backgroundColor: Colors.white.withValues(alpha: 0.1),
+                              color: AppColors.primaryTeal,
+                              minHeight: 6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildSectionTitle('Anonymous Activity', Icons.person_search_rounded),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GuestTelemetryLogsScreen(),
+                  ),
+                );
+              },
+              child: Text(
+                'See All',
+                style: TextStyle(
+                  color: AppColors.primaryTeal,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ..._recentGuestLogs.map((log) => AdminActivityTile(log: {
+          ...log,
+          'action': '👤 Guest: ${log['action']}',
+        })),
+        if (_recentGuestLogs.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('No guest activity monitored yet.', style: TextStyle(color: AppColors.mutedText)),
+            ),
+          ),
+      ],
+    );
+  }
+}

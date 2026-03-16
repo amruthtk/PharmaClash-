@@ -90,36 +90,67 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Main content
-        _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _doseLogs.isEmpty
-            ? _buildEmptyState()
-            : _buildDoseLogsList(),
-
-        // Export FAB
-        Positioned(
-          bottom: 20,
-          right: 20,
-          child: FloatingActionButton.extended(
-            onPressed: _isExporting ? null : _exportReport,
-            backgroundColor: _isExporting ? Colors.grey : AppColors.primaryTeal,
-            icon: _isExporting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.picture_as_pdf_rounded),
-            label: Text(_isExporting ? 'Generating...' : 'Export Report'),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text(
+          'Dose History',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: AppColors.darkText,
           ),
         ),
-      ],
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          if (!_isLoading)
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: _isExporting
+                  ? const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryTeal,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TextButton.icon(
+                        onPressed: _exportReport,
+                        icon: const Icon(
+                          Icons.picture_as_pdf_rounded,
+                          size: 18,
+                        ),
+                        label: const Text(
+                          'Export',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primaryTeal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                      ),
+                    ),
+            ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _doseLogs.isEmpty
+          ? _buildEmptyState()
+          : _buildDoseLogsList(),
     );
   }
 
