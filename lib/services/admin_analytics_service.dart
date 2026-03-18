@@ -33,24 +33,34 @@ class AdminAnalyticsService {
   // ==================== Risk Distribution ====================
 
   /// Computes risk distribution from the interaction data embedded in drugs.
-  ///
-  /// Returns `{ 'severe': n, 'moderate': n, 'mild': n, 'total': n }`.
+  /// Deduplicates reciprocal rules to show accurate counts.
   Map<String, int> getRiskDistribution(List<DrugModel> drugs) {
     int severe = 0;
     int moderate = 0;
     int mild = 0;
+    final Set<String> seenKeys = {};
 
     for (final drug in drugs) {
       for (final interaction in drug.drugInteractions) {
-        switch (interaction.severity.toLowerCase()) {
-          case 'severe':
-            severe++;
-            break;
-          case 'moderate':
-            moderate++;
-            break;
-          default:
-            mild++;
+        final names = [
+          drug.displayName.toLowerCase(),
+          interaction.drugName.toLowerCase()
+        ];
+        names.sort();
+        final key = '${names[0]}_${names[1]}_${interaction.severity.toLowerCase()}';
+
+        if (!seenKeys.contains(key)) {
+          seenKeys.add(key);
+          switch (interaction.severity.toLowerCase()) {
+            case 'severe':
+              severe++;
+              break;
+            case 'moderate':
+              moderate++;
+              break;
+            default:
+              mild++;
+          }
         }
       }
     }
@@ -63,12 +73,27 @@ class AdminAnalyticsService {
     };
   }
 
-  /// Total interaction rules across all drugs.
+  /// Total interaction rules across all drugs (deduplicated).
   int getInteractionRuleCount(List<DrugModel> drugs) {
-    return drugs.fold<int>(
-      0,
-      (total, drug) => total + drug.drugInteractions.length,
-    );
+    final Set<String> seenKeys = {};
+    int count = 0;
+
+    for (final drug in drugs) {
+      for (final interaction in drug.drugInteractions) {
+        final names = [
+          drug.displayName.toLowerCase(),
+          interaction.drugName.toLowerCase()
+        ];
+        names.sort();
+        final key = '${names[0]}_${names[1]}_${interaction.severity.toLowerCase()}';
+
+        if (!seenKeys.contains(key)) {
+          seenKeys.add(key);
+          count++;
+        }
+      }
+    }
+    return count;
   }
 
   // ==================== Audit Logging ====================
@@ -145,6 +170,7 @@ class AdminAnalyticsService {
     required String action,
     String? details,
     String? targetId,
+    Map<String, dynamic>? extraData,
   }) async {
     try {
       await _guestTelemetry.add({
@@ -153,6 +179,7 @@ class AdminAnalyticsService {
         'details': details,
         'targetId': targetId,
         'timestamp': FieldValue.serverTimestamp(),
+        if (extraData != null) ...extraData,
       });
       debugPrint('GuestTelemetry: ✅ Logged "$action" for guest $guestId');
     } catch (e) {
@@ -160,23 +187,14 @@ class AdminAnalyticsService {
     }
   }
 
-  /// Fetches 3-stage funnel data: Installs, Guest Interactions, Registered Patients.
+  /// Fetches 2-stage funnel data: Active Guests, Registered Patients.
   Future<Map<String, int>> getFunnelData() async {
     try {
-      // Stage 1: App Installs
-      final installSnapshot = await _guestTelemetry
-          .where('action', isEqualTo: 'app_install')
-          .count()
-          .get();
-      
-      int installs = installSnapshot.count ?? 0;
-      
-      // Stage 2: Guest Interactions (Unique guest IDs with any meaningful activity)
-      // We query more broadly to ensure we don't miss any "active" guests.
+      // Fetch all telemetry once for efficient counting
       final interactionSnapshot = await _guestTelemetry.get();
-      
       final guestEvents = interactionSnapshot.docs.map((doc) => doc.data()).toList();
-      
+
+      // Stage 1: Active Guests (Unique guest IDs with meaningful activity)
       final uniqueInteractedGuests = guestEvents
           .where((data) => [
             'guest_scan_start', 
@@ -188,31 +206,25 @@ class AdminAnalyticsService {
           .where((id) => id != null)
           .toSet();
 
-      // Fallback: If installs is 0 but we have interactions, use interactions as floor for installs
-      // (This handles users who had the app before 'app_install' event was added)
-      if (installs < uniqueInteractedGuests.length) {
-        installs = uniqueInteractedGuests.length;
-      }
-
-      // Stage 3: Registered Patients (Actual users in firestore)
+      // Stage 2: Registered Patients (Actual users in firestore)
       final userSnapshot = await _firestore.collection('users').count().get();
       final patients = userSnapshot.count ?? 0;
 
       final data = {
-        'installs': installs,
         'interactions': uniqueInteractedGuests.length,
         'patients': patients,
       };
 
-      debugPrint('AdminAnalytics: Aggregated Funnel -> I:$installs IN:${uniqueInteractedGuests.length} P:$patients');
+      debugPrint('AdminAnalytics: Aggregated Funnel -> AG:${uniqueInteractedGuests.length} P:$patients');
       return data;
     } catch (e) {
       debugPrint('AdminAnalytics: getFunnelData error: $e');
-      return {'installs': 0, 'interactions': 0, 'patients': 0};
+      return {'interactions': 0, 'patients': 0};
     }
   }
 
   /// Top 10 guest interaction checks (Risk Heatmap).
+  /// Combines A+B and B+A into a single entry and reports peak severity.
   Future<List<Map<String, dynamic>>> getTopGuestInteractions() async {
     try {
       final snapshot = await _guestTelemetry
@@ -220,19 +232,49 @@ class AdminAnalyticsService {
           .get();
 
       final Map<String, int> counts = {};
+      final Map<String, String> severities = {};
+
       for (var doc in snapshot.docs) {
-        final details = doc.data()['details'] as String? ?? 'Unknown';
-        counts[details] = (counts[details] ?? 0) + 1;
+        final data = doc.data();
+        final rawDetails = data['details'] as String? ?? 'Unknown';
+        final severity = data['severity'] as String? ?? 'safe';
+
+        // Normalize: "A + B" and "B + A" both become sorted "A + B"
+        String label = rawDetails;
+        if (rawDetails.contains(' + ')) {
+          final parts = rawDetails.split(' + ');
+          parts.sort();
+          label = parts.join(' + ');
+        }
+
+        counts[label] = (counts[label] ?? 0) + 1;
+
+        // Keep peak severity: severe > moderate > mild > safe
+        final currentMax = severities[label] ?? 'safe';
+        if (_isMoreSevere(severity, currentMax)) {
+          severities[label] = severity;
+        }
       }
 
       final sorted = counts.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
 
-      return sorted.take(10).map((e) => {'label': e.key, 'count': e.value}).toList();
+      return sorted.take(10).map((e) {
+        return {
+          'label': e.key,
+          'count': e.value,
+          'severity': severities[e.key] ?? 'safe',
+        };
+      }).toList();
     } catch (e) {
       debugPrint('AdminAnalytics: getTopGuestInteractions error: $e');
       return [];
     }
+  }
+
+  bool _isMoreSevere(String a, String b) {
+    const order = {'severe': 3, 'moderate': 2, 'mild': 1, 'safe': 0};
+    return (order[a.toLowerCase()] ?? 0) > (order[b.toLowerCase()] ?? 0);
   }
 
   /// Guest scan success metrics.

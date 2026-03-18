@@ -86,6 +86,91 @@ class ExpiryBanner extends StatelessWidget {
   }
 }
 
+/// Red banner for medicines out of stock
+class OutOfStockBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const OutOfStockBanner({
+    super.key,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (count == 0) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.redAccent.shade400, Colors.redAccent.shade700],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.redAccent.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.block_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    count == 1
+                        ? '1 medicine is out of stock'
+                        : '$count medicines are out of stock',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Refill now to maintain adherence',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Yellow warning banner for medicines expiring soon
 class ExpiringSoonBanner extends StatelessWidget {
   final int count;
@@ -147,19 +232,23 @@ class ExpiringSoonBanner extends StatelessWidget {
 class CabinetAlertBanner extends StatelessWidget {
   final int expiredCount;
   final int expiringSoonCount;
+  final int outOfStockCount;
   final VoidCallback onTap;
 
   const CabinetAlertBanner({
     super.key,
     required this.expiredCount,
     required this.expiringSoonCount,
+    required this.outOfStockCount,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Priority: Show expired banner if any, otherwise expiring soon
-    if (expiredCount > 0) {
+    // Priority: Show stock/expiry banners if any, otherwise expiring soon
+    if (outOfStockCount > 0) {
+      return OutOfStockBanner(count: outOfStockCount, onTap: onTap);
+    } else if (expiredCount > 0) {
       return ExpiryBanner(expiredCount: expiredCount, onTap: onTap);
     } else if (expiringSoonCount > 0) {
       return ExpiringSoonBanner(count: expiringSoonCount, onTap: onTap);

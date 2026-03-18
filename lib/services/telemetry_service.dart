@@ -44,7 +44,7 @@ class TelemetryService {
   }
 
   /// Logs a telemetry event with guest context.
-  Future<void> logEvent(String action, {String? details, String? targetId}) async {
+  Future<void> logEvent(String action, {String? details, String? targetId, Map<String, dynamic>? extraData}) async {
     if (_guestId == null) await init();
     
     await _analytics.logGuestEvent(
@@ -52,6 +52,7 @@ class TelemetryService {
       action: action,
       details: details,
       targetId: targetId,
+      extraData: extraData,
     );
   }
 }

@@ -60,6 +60,9 @@ class MedicineInventoryService {
         await _notificationService.scheduleMedicineReminders(medicineWithId);
       }
 
+      // Trigger immediate alerts if needed (expired, soon, or low stock)
+      await _triggerCabinetAlerts(uid);
+
       return docRef.id;
     } catch (e) {
       throw 'Failed to add medicine: $e';
@@ -357,6 +360,7 @@ class MedicineInventoryService {
         'lowStockAlertShown': false,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      await _triggerCabinetAlerts(uid);
     } catch (e) {
       throw 'Failed to update strip: $e';
     }
@@ -504,6 +508,33 @@ class MedicineInventoryService {
   }
 
   // ==================== Helper Methods ====================
+  
+  /// Trigger push notifications for cabinet alerts (expired, soon, low stock)
+  Future<void> _triggerCabinetAlerts(String uid) async {
+    try {
+      final medicines = await getUserMedicines(uid);
+      
+      final expired = medicines.where((m) => m.isExpired).length;
+      final expiringSoon = medicines.where((m) => m.isExpiringSoon).length;
+      final lowStock = medicines.where((m) => m.isLowStock && m.tabletCount > 0).toList();
+      
+      if (expired > 0 || expiringSoon > 0) {
+        await _notificationService.showExpiryAlert(
+          expiredCount: expired,
+          expiringSoonCount: expiringSoon,
+        );
+      }
+      
+      if (lowStock.isNotEmpty) {
+        await _notificationService.showLowStockAlert(
+          lowStockCount: lowStock.length,
+          medicineNames: lowStock.map((m) => m.medicineName).toList(),
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to trigger cabinet alerts: $e');
+    }
+  }
 
   /// Check if a medicine already exists in cabinet (by drugId)
   Future<UserMedicine?> findMedicineByDrugId(String uid, String drugId) async {
@@ -676,6 +707,9 @@ class MedicineInventoryService {
           );
         }
       }
+
+      // Trigger alerts (e.g. if it just hit low stock)
+      await _triggerCabinetAlerts(uid);
     } catch (e) {
       throw 'Failed to log dose: $e';
     }

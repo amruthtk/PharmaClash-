@@ -37,18 +37,33 @@ class _InteractionRulesScreenState extends State<InteractionRulesScreen> {
   }
 
   /// Flatten all DrugInteraction entries across all drugs into a single list.
+  /// Uses deduplication to avoid showing both A->B and B->A for the same rule.
   void _flattenRules() {
     _allRules = [];
+    final Set<String> seenKeys = {};
+
     for (final drug in widget.drugs) {
       for (int i = 0; i < drug.drugInteractions.length; i++) {
         final interaction = drug.drugInteractions[i];
-        _allRules.add(
-          _FlatInteraction(
-            sourceDrug: drug,
-            interaction: interaction,
-            indexInSource: i,
-          ),
-        );
+        
+        // Create a unique key for this interaction (sorted drug names + severity)
+        final names = [
+          drug.displayName.toLowerCase(),
+          interaction.drugName.toLowerCase()
+        ];
+        names.sort();
+        final key = '${names[0]}_${names[1]}_${interaction.severity.toLowerCase()}';
+
+        if (!seenKeys.contains(key)) {
+          seenKeys.add(key);
+          _allRules.add(
+            _FlatInteraction(
+              sourceDrug: drug,
+              interaction: interaction,
+              indexInSource: i,
+            ),
+          );
+        }
       }
     }
     // Sort: severe first, then moderate, then mild
@@ -127,26 +142,62 @@ class _InteractionRulesScreenState extends State<InteractionRulesScreen> {
     if (confirmed != true) return;
 
     try {
-      // Remove interaction from the drug's interactions array
-      final updatedInteractions = List<DrugInteraction>.from(
-        rule.sourceDrug.drugInteractions,
+      // 1. Remove from Source Drug
+      final sourceDrug = rule.sourceDrug;
+      final sourceInteractions = List<DrugInteraction>.from(
+        sourceDrug.drugInteractions,
       );
-      updatedInteractions.removeAt(rule.indexInSource);
+      sourceInteractions.removeAt(rule.indexInSource);
 
-      final updatedDrug = rule.sourceDrug.copyWith(
-        drugInteractions: updatedInteractions,
+      final updatedSourceDrug = sourceDrug.copyWith(
+        drugInteractions: sourceInteractions,
       );
 
-      await DrugService().updateDrug(updatedDrug);
+      await DrugService().updateDrug(updatedSourceDrug);
+
+      // 2. Remove from Target Drug (Reciprocal side)
+      final targetDrugName = rule.interaction.drugName.toLowerCase();
+      final targetDrug = widget.drugs.cast<DrugModel?>().firstWhere(
+        (d) => d?.displayName.toLowerCase() == targetDrugName,
+        orElse: () => null,
+      );
+
+      if (targetDrug != null) {
+        final targetInteractions = List<DrugInteraction>.from(
+          targetDrug.drugInteractions,
+        );
+        targetInteractions.removeWhere(
+          (i) => i.drugName.toLowerCase() == sourceDrug.displayName.toLowerCase(),
+        );
+
+        final updatedTargetDrug = targetDrug.copyWith(
+          drugInteractions: targetInteractions,
+        );
+
+        await DrugService().updateDrug(updatedTargetDrug);
+        
+        // Update local state for target drug
+        final targetIdx = widget.drugs.indexWhere((d) => d.id == targetDrug.id);
+        if (targetIdx >= 0) {
+          widget.drugs[targetIdx] = updatedTargetDrug;
+        }
+      }
+
+      // 3. Update local state for source drug
+      final sourceIdx = widget.drugs.indexWhere((d) => d.id == sourceDrug.id);
+      if (sourceIdx >= 0) {
+        widget.drugs[sourceIdx] = updatedSourceDrug;
+      }
+
       await AdminAnalyticsService().logAdminAction(
-        action: 'Deleted interaction rule',
+        action: 'Deleted interaction rule (reciprocal)',
         details:
-            '${rule.sourceDrug.displayName} ↔ ${rule.interaction.drugName} (${rule.interaction.severity})',
-        targetId: rule.sourceDrug.id,
+            '${sourceDrug.displayName} ↔ ${rule.interaction.drugName} (${rule.interaction.severity})',
+        targetId: sourceDrug.id,
       );
 
       // Refresh local state
-      _allRules.remove(rule);
+      _flattenRules();
       _applyFilters();
 
       if (mounted) {
@@ -284,7 +335,7 @@ class _InteractionRulesScreenState extends State<InteractionRulesScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemCount: filters.length,
         itemBuilder: (_, i) {
           final label = filters[i];

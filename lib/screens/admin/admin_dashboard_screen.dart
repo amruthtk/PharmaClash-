@@ -41,7 +41,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   List<Map<String, dynamic>> _recentGuestLogs = [];
 
   // Guest Stats
-  Map<String, int> _funnelData = {'installs': 0, 'interactions': 0, 'patients': 0};
+  Map<String, int> _funnelData = {'interactions': 0, 'patients': 0};
   List<Map<String, dynamic>> _topGuestChecks = [];
   double _guestScanSuccessRate = 0.0;
   bool _showGuestInsights = false;
@@ -79,7 +79,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       try { recentLogs = await _analytics.getRecentAdminLogs(limit: 5); } catch (e) { debugPrint('Dashboard: recentLogs error: $e'); }
 
       // Guest analytics — each is independent, one failing shouldn't block others
-      Map<String, int> funnelData = {'installs': 0, 'interactions': 0, 'patients': 0};
+      Map<String, int> funnelData = {'interactions': 0, 'patients': 0};
       try { funnelData = await _analytics.getFunnelData(); } catch (e) { debugPrint('Dashboard: funnelData error: $e'); }
 
       List<Map<String, dynamic>> topGuestChecks = [];
@@ -552,7 +552,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const SizedBox(width: 4),
           Expanded(
             child: _buildToggleItem(
-              'Guest Insights',
+              'User Insights',
               Icons.analytics_rounded,
               _showGuestInsights,
               () => setState(() => _showGuestInsights = true),
@@ -607,18 +607,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       children: [
         _buildSectionTitle('Acquisition Funnel', Icons.filter_alt_rounded),
         const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.borderColor),
-          ),
-          child: AdminFunnelChart(
-            installs: _funnelData['installs'] ?? 0,
-            interactions: _funnelData['interactions'] ?? 0,
-            patients: _funnelData['patients'] ?? 0,
-          ),
+        AdminFunnelChart(
+          interactions: _funnelData['interactions'] ?? 0,
+          patients: _funnelData['patients'] ?? 0,
         ),
         const SizedBox(height: 24),
         Row(
@@ -663,7 +654,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   children: _topGuestChecks.map((check) {
                     final label = check['label'] as String;
                     final count = check['count'] as int;
+                    final severity = check['severity'] as String? ?? 'safe';
                     final maxCount = _topGuestChecks.first['count'] as int;
+                    final barColor = _getSeverityColor(severity);
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Column(
@@ -673,7 +667,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
-                              Text('$count checks', style: const TextStyle(color: AppColors.primaryTeal, fontSize: 12, fontWeight: FontWeight.bold)),
+                              Text('$count checks', style: TextStyle(color: barColor, fontSize: 12, fontWeight: FontWeight.bold)),
                             ],
                           ),
                           const SizedBox(height: 6),
@@ -682,7 +676,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             child: LinearProgressIndicator(
                               value: count / maxCount,
                               backgroundColor: Colors.white.withValues(alpha: 0.1),
-                              color: AppColors.primaryTeal,
+                              color: barColor,
                               minHeight: 6,
                             ),
                           ),
@@ -730,5 +724,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
       ],
     );
+  }
+
+  Color _getSeverityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'severe':
+        return Colors.red.shade400;
+      case 'moderate':
+        return Colors.orange.shade400;
+      case 'mild':
+        return Colors.blue.shade400;
+      default:
+        return AppColors.primaryTeal;
+    }
   }
 }

@@ -50,6 +50,7 @@ class NotificationService {
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
+      macOS: null,
     );
 
     await _notifications.initialize(
@@ -226,8 +227,8 @@ class NotificationService {
       }
     }
 
-    // 3. Reschedule daily health check
-    await scheduleDailyHealthCheck();
+    // 3. Reschedule daily health check with dynamic content
+    await scheduleDailyHealthCheck(medicines);
 
     // 4. Reschedule nightly missed dose "last call" at 10 PM
     await scheduleNightlyMissedDoseCheck();
@@ -385,7 +386,7 @@ class NotificationService {
   }
 
   /// Schedule daily health check notification (9 AM)
-  Future<void> scheduleDailyHealthCheck() async {
+  Future<void> scheduleDailyHealthCheck(List<UserMedicine> medicines) async {
     final now = DateTime.now();
     var scheduledTime = DateTime(now.year, now.month, now.day, 9, 0);
 
@@ -396,10 +397,44 @@ class NotificationService {
 
     final tzScheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
 
+    // Calculate dynamic body based on cabinet status
+    int expired = 0;
+    int expiringSoon = 0;
+    int lowStock = 0;
+    int outOfStock = 0;
+
+    for (final med in medicines) {
+      if (med.isExpired) {
+        expired++;
+      } else if (med.isExpiringSoon) {
+        expiringSoon++;
+      }
+
+      if (med.tabletCount == 0) {
+        outOfStock++;
+      } else if (med.isLowStock) {
+        lowStock++;
+      }
+    }
+
+    // Construction of a personalized, status-aware message
+    String body = 'Review your medicine cabinet for today.';
+    List<String> statusAlerts = [];
+    
+    if (expired > 0) statusAlerts.add('expired');
+    if (outOfStock > 0) statusAlerts.add('out of stock');
+    if (expiringSoon > 0) statusAlerts.add('expiring soon');
+    if (lowStock > 0) statusAlerts.add('low stock');
+
+    if (statusAlerts.isNotEmpty) {
+      final String alertJoined = statusAlerts.join(', ');
+      body = 'Review your cabinet: You have medicines that are $alertJoined. Tap to check.';
+    }
+
     await _notifications.zonedSchedule(
       99000, // Fixed ID for daily check
       '🌅 Good Morning!',
-      'Review your medicine cabinet for today.',
+      body,
       tzScheduledDate,
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -409,6 +444,7 @@ class NotificationService {
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
           icon: '@mipmap/ic_launcher',
+          styleInformation: BigTextStyleInformation(body),
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
@@ -418,6 +454,64 @@ class NotificationService {
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
+      payload: 'daily_check',
+    );
+  }
+
+  /// Show daily health check notification immediately (for testing)
+  Future<void> showImmediateDailyHealthCheck(List<UserMedicine> medicines) async {
+    int expired = 0;
+    int expiringSoon = 0;
+    int lowStock = 0;
+    int outOfStock = 0;
+
+    for (final med in medicines) {
+      if (med.isExpired) {
+        expired++;
+      } else if (med.isExpiringSoon) {
+        expiringSoon++;
+      }
+
+      if (med.tabletCount == 0) {
+        outOfStock++;
+      } else if (med.isLowStock) {
+        lowStock++;
+      }
+    }
+
+    String body = 'Review your medicine cabinet for today.';
+    List<String> statusAlerts = [];
+    
+    if (expired > 0) statusAlerts.add('expired');
+    if (outOfStock > 0) statusAlerts.add('stock finished');
+    if (expiringSoon > 0) statusAlerts.add('expiring soon');
+    if (lowStock > 0) statusAlerts.add('low stock');
+
+    if (statusAlerts.isNotEmpty) {
+      final String alertJoined = statusAlerts.join(', ');
+      body = 'Review your cabinet: You have medicines that are $alertJoined. Tap to check.';
+    }
+
+    await _notifications.show(
+      99000, // Fixed ID for daily check
+      '🌅 Good Morning!',
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'daily_check',
+          'Daily Health Check',
+          channelDescription: 'Daily reminder to check your medicines',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          styleInformation: BigTextStyleInformation(body),
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
       payload: 'daily_check',
     );
   }

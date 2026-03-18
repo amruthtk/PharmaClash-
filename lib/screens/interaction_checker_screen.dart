@@ -209,12 +209,8 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
     // Profile mode: use checkDrugWarnings
     if (_isProfileMode) {
       // Log guest interaction check
-      if (widget.isGuestMode) {
-        TelemetryService().logEvent(
-          'guest_interaction_check',
-          details: '${_drugAController.text} + Profile',
-        );
-      }
+      // Telemetry will be logged after result is computed
+
 
       setState(() {
         _isChecking = true; // Assuming _isAnalyzing is _isChecking
@@ -235,6 +231,25 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
             _isChecking = false;
             _hasChecked = true;
           });
+
+          if (widget.isGuestMode) {
+            String peakSeverity = 'safe';
+            if (result.hasAllergyWarning) {
+              peakSeverity = 'severe';
+            } else if (result.matchedDrugInteractions.isNotEmpty) {
+              final severities = result.matchedDrugInteractions.map((i) => i.severity.toLowerCase()).toList();
+              if (severities.contains('severe')) {
+                peakSeverity = 'severe';
+              } else if (severities.contains('moderate')) peakSeverity = 'moderate';
+              else if (severities.contains('mild')) peakSeverity = 'mild';
+            }
+
+            TelemetryService().logEvent(
+              'guest_interaction_check',
+              details: '${_drugAController.text} + Profile',
+              extraData: {'severity': peakSeverity},
+            );
+          }
         }
       } catch (e) {
         debugPrint('Profile check error: $e');
@@ -251,13 +266,8 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
       _interactions = [];
     });
 
-    // Log guest interaction check (Drug vs Drug)
-    if (widget.isGuestMode) {
-      TelemetryService().logEvent(
-        'guest_interaction_check',
-        details: '${_drugAController.text} + ${_drugBController.text}',
-      );
-    }
+      // Telemetry will be logged after result is computed
+
 
     final Map<String, DrugInteraction> matchedInteractions = {};
 
@@ -316,6 +326,24 @@ class _InteractionCheckerScreenState extends State<InteractionCheckerScreen> {
         _isChecking = false;
         _hasChecked = true;
       });
+
+      // Log guest interaction check (Drug vs Drug) with severity context
+      if (widget.isGuestMode) {
+        String peakSeverity = 'safe';
+        if (_interactions.isNotEmpty) {
+          final severities = _interactions.map((i) => i.severity.toLowerCase()).toList();
+          if (severities.contains('severe')) {
+            peakSeverity = 'severe';
+          } else if (severities.contains('moderate')) peakSeverity = 'moderate';
+          else if (severities.contains('mild')) peakSeverity = 'mild';
+        }
+
+        TelemetryService().logEvent(
+          'guest_interaction_check',
+          details: '${_drugAController.text} + ${_drugBController.text}',
+          extraData: {'severity': peakSeverity},
+        );
+      }
     }
   }
 

@@ -118,7 +118,7 @@ class _AddEditInteractionRuleScreenState
 
       await DrugService().updateDrug(updatedDrugA);
 
-      // Also add reciprocal rule on Drug B if it exists in DB
+      // Also add/update reciprocal rule on Drug B if it exists in DB
       if (_drugB != null && _drugB!.id != null) {
         final reciprocal = DrugInteraction(
           drugName: _drugA!.displayName,
@@ -126,20 +126,27 @@ class _AddEditInteractionRuleScreenState
           description: _descriptionController.text.trim(),
         );
 
-        // Check if reciprocal already exists
-        final alreadyExists = _drugB!.drugInteractions.any(
+        final updatedDrugBInteractions = List<DrugInteraction>.from(
+          _drugB!.drugInteractions,
+        );
+
+        // Find if reciprocal already exists
+        final existingIdx = updatedDrugBInteractions.indexWhere(
           (i) => i.drugName.toLowerCase() == _drugA!.displayName.toLowerCase(),
         );
 
-        if (!alreadyExists) {
-          final updatedDrugBInteractions = List<DrugInteraction>.from(
-            _drugB!.drugInteractions,
-          )..add(reciprocal);
-          final updatedDrugB = _drugB!.copyWith(
-            drugInteractions: updatedDrugBInteractions,
-          );
-          await DrugService().updateDrug(updatedDrugB);
+        if (existingIdx >= 0) {
+          // Update existing
+          updatedDrugBInteractions[existingIdx] = reciprocal;
+        } else {
+          // Add new
+          updatedDrugBInteractions.add(reciprocal);
         }
+
+        final updatedDrugB = _drugB!.copyWith(
+          drugInteractions: updatedDrugBInteractions,
+        );
+        await DrugService().updateDrug(updatedDrugB);
       }
 
       // Log the action

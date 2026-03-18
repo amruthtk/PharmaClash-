@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_medicine_model.dart';
@@ -49,9 +50,12 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Track if missed dose prompt has been shown this session
   bool _missedDosePromptShown = false;
 
-  // Nightly 10 PM in-app check
+  // NIGHTLY 10 PM IN-APP CHECK
   Timer? _nightlyCheckTimer;
   bool _nightlyCheckShown = false;
+
+  // Stream subscription for real-time cabinet updates
+  StreamSubscription<List<UserMedicine>>? _medicineSubscription;
 
   // User info
   String _userName = 'User';
@@ -62,9 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Low stock and expiring soon tracking
   int _lowStockCount = 0;
-  List<UserMedicine> _lowStockMedicines = [];
-  List<UserMedicine> _expiringSoonMedicines = []; // Added
-
+  int _outOfStockCount = 0;
   // Schedule expand state
   bool _showAllSchedule = false;
 
@@ -92,6 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadDashboardData();
+    _initMedicineStream();
     _scheduleNightlyInAppCheck();
 
     _pulseController = AnimationController(
@@ -134,11 +137,49 @@ class _DashboardScreenState extends State<DashboardScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _nightlyCheckTimer?.cancel();
+    _medicineSubscription?.cancel();
     _pulseController.dispose();
     _floatController.dispose();
     _scanController.dispose();
     _caregiverService.stopListening();
     super.dispose();
+  }
+
+  void _initMedicineStream() {
+    final user = _firebaseService.currentUser;
+    if (user == null) return;
+
+    _medicineSubscription = _inventoryService
+        .streamUserMedicines(user.uid)
+        .listen((medicines) {
+          if (mounted) {
+            final lowStock = medicines
+                .where(
+                  (m) =>
+                      m.isLowStock &&
+                      !m.lowStockAlertShown &&
+                      m.tabletCount > 0 &&
+                      !m.isExpired,
+                )
+                .toList();
+            final outOfStock = medicines
+                .where((m) => m.tabletCount == 0 && !m.lowStockAlertShown)
+                .toList();
+            final expiringSoon = medicines
+                .where((m) => m.isExpiringSoon && !m.expiringSoonAlertShown)
+                .toList();
+            final expired = medicines
+                .where((m) => m.isExpired && !m.expiryAlertShown)
+                .toList();
+
+            setState(() {
+              _expiredCount = expired.length;
+              _expiringSoonCount = expiringSoon.length;
+              _lowStockCount = lowStock.length;
+              _outOfStockCount = outOfStock.length;
+            });
+          }
+        });
   }
 
   /// Load all dashboard data with a single UI refresh
@@ -165,29 +206,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         medicines: medicines,
       );
 
-      // Compute status locally
-      final lowStock = medicines
-          .where(
-            (m) => m.isLowStock && !m.lowStockAlertShown && m.tabletCount > 0,
-          )
-          .toList();
-      final expiringSoon = medicines
-          .where((m) => m.isExpiringSoon && !m.expiringSoonAlertShown)
-          .toList();
-      final expired = medicines
-          .where((m) => m.isExpired && !m.expiryAlertShown)
-          .toList();
       final needingModal = medicines
           .where((m) => _expiryService.shouldShowBlockingModal(m))
           .toList();
 
       if (mounted) {
         setState(() {
-          _expiredCount = expired.length;
-          _expiringSoonCount = expiringSoon.length;
-          _expiringSoonMedicines = expiringSoon;
-          _lowStockCount = lowStock.length;
-          _lowStockMedicines = lowStock;
           _adherenceData = adherence;
           _loggedDoseKeys = keys;
           _userName = firstName;
@@ -300,7 +324,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   /// Total notification count
   int get _totalNotificationCount =>
-      _expiredCount + _expiringSoonCount + _lowStockCount;
+      _expiredCount + _expiringSoonCount + _lowStockCount + _outOfStockCount;
 
   void _showNotificationPanel() {
     final user = _firebaseService.currentUser;
@@ -308,11 +332,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     NotificationPanel.show(
       context: context,
-      totalCount: _totalNotificationCount,
-      expiredCount: _expiredCount,
-      expiringSoonCount: _expiringSoonCount,
-      lowStockMedicines: _lowStockMedicines,
-      expiringSoonMedicines: _expiringSoonMedicines,
+      userId: user.uid,
+      inventoryService: _inventoryService,
+      expiryService: _expiryService,
       onGoToCabinet: () async {
         // Close panel before navigating
         if (Navigator.canPop(context)) Navigator.pop(context);
@@ -324,14 +346,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       onDismiss: (med, type) async {
         if (type == 'expired_all') {
           // For expired, we mark ALL currently expired ones as shown
-          final batch = _inventoryService.getUserMedicines(user.uid).then((
-            medicines,
-          ) async {
-            for (final m in medicines.where((m) => m.isExpired)) {
-              await _inventoryService.markExpiryAlertShown(user.uid, m.id!);
-            }
-          });
-          await batch;
+          final medicines = await _inventoryService.getUserMedicines(user.uid);
+          for (final m in medicines.where((m) => m.isExpired)) {
+            await _inventoryService.markExpiryAlertShown(user.uid, m.id!);
+          }
         } else if (type == 'soon') {
           await _inventoryService.markExpiringSoonAlertShown(user.uid, med.id!);
         } else if (type == 'stock') {
@@ -577,6 +595,13 @@ class _DashboardScreenState extends State<DashboardScreen>
       title: title,
       hasNotifications: _totalNotificationCount > 0,
       onNotificationTap: _showNotificationPanel,
+      onDebugTap: kDebugMode ? () async {
+        final user = _firebaseService.currentUser;
+        if (user != null) {
+          final medicines = await _inventoryService.getUserMedicines(user.uid);
+          await NotificationService().showImmediateDailyHealthCheck(medicines);
+        }
+      } : null,
       onProfileTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const ProfileScreen()),
@@ -657,6 +682,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             CabinetAlertBanner(
               expiredCount: _expiredCount,
               expiringSoonCount: _expiringSoonCount,
+              outOfStockCount: _outOfStockCount,
               onTap: _goToCabinet,
             ),
 

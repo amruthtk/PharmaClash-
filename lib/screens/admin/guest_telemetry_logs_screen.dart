@@ -99,7 +99,7 @@ class _GuestTelemetryLogsScreenState extends State<GuestTelemetryLogsScreen> {
               scrollDirection: Axis.horizontal,
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemCount: _filters.length,
               itemBuilder: (_, i) {
                 final filter = _filters[i];

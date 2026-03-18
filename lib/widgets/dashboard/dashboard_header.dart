@@ -8,6 +8,7 @@ class DashboardHeader extends StatelessWidget {
   final bool hasNotifications;
   final VoidCallback onNotificationTap;
   final VoidCallback onProfileTap;
+  final VoidCallback? onDebugTap;
 
   const DashboardHeader({
     super.key,
@@ -16,6 +17,7 @@ class DashboardHeader extends StatelessWidget {
     required this.hasNotifications,
     required this.onNotificationTap,
     required this.onProfileTap,
+    this.onDebugTap,
   });
 
   @override
@@ -93,6 +95,13 @@ class DashboardHeader extends StatelessWidget {
                   // Action buttons
                   Row(
                     children: [
+                      if (onDebugTap != null) ...[
+                        _buildGlassButton(
+                          icon: Icons.bug_report_outlined,
+                          onTap: onDebugTap!,
+                        ),
+                        const SizedBox(width: 10),
+                      ],
                       _buildGlassButton(
                         icon: Icons.notifications_outlined,
                         hasNotification: hasNotifications,

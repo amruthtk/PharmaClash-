@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../models/user_medicine_model.dart';
 import '../../theme/app_colors.dart';
+import '../../services/medicine_inventory_service.dart';
+import '../../services/expiry_alert_service.dart';
 
 class NotificationPanel extends StatelessWidget {
   final int totalCount;
   final int expiredCount;
   final int expiringSoonCount;
+  final int outOfStockCount;
   final List<UserMedicine> lowStockMedicines;
+  final List<UserMedicine> outOfStockMedicines;
   final List<UserMedicine> expiringSoonMedicines;
   final VoidCallback onGoToCabinet;
   final Function(UserMedicine, String)
@@ -18,7 +22,9 @@ class NotificationPanel extends StatelessWidget {
     required this.totalCount,
     required this.expiredCount,
     required this.expiringSoonCount,
+    required this.outOfStockCount,
     required this.lowStockMedicines,
+    required this.outOfStockMedicines,
     required this.expiringSoonMedicines,
     required this.onGoToCabinet,
     required this.onDismiss,
@@ -27,11 +33,9 @@ class NotificationPanel extends StatelessWidget {
 
   static void show({
     required BuildContext context,
-    required int totalCount,
-    required int expiredCount,
-    required int expiringSoonCount,
-    required List<UserMedicine> lowStockMedicines,
-    required List<UserMedicine> expiringSoonMedicines,
+    required String userId,
+    required MedicineInventoryService inventoryService,
+    required ExpiryAlertService expiryService,
     required VoidCallback onGoToCabinet,
     required Function(UserMedicine, String) onDismiss,
     required VoidCallback onClearAll,
@@ -40,15 +44,46 @@ class NotificationPanel extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => NotificationPanel(
-        totalCount: totalCount,
-        expiredCount: expiredCount,
-        expiringSoonCount: expiringSoonCount,
-        lowStockMedicines: lowStockMedicines,
-        expiringSoonMedicines: expiringSoonMedicines,
-        onGoToCabinet: onGoToCabinet,
-        onDismiss: onDismiss,
-        onClearAll: onClearAll,
+      builder: (context) => StreamBuilder<List<UserMedicine>>(
+        stream: inventoryService.streamUserMedicines(userId),
+        builder: (context, snapshot) {
+          final medicines = snapshot.data ?? [];
+          
+          final lowStock = medicines
+              .where((m) =>
+                  m.isLowStock &&
+                  !m.lowStockAlertShown &&
+                  m.tabletCount > 0 &&
+                  !m.isExpired)
+              .toList();
+          final outOfStock = medicines
+              .where((m) => m.tabletCount == 0 && !m.lowStockAlertShown)
+              .toList();
+          final expiringSoon = medicines
+              .where((m) => m.isExpiringSoon && !m.expiringSoonAlertShown)
+              .toList();
+          final expired = medicines
+              .where((m) => m.isExpired && !m.expiryAlertShown)
+              .toList();
+          
+          final int expiredCount = expired.length;
+          final int expiringSoonCount = expiringSoon.length;
+          final int outOfStockCount = outOfStock.length;
+          final int totalCount = expiredCount + expiringSoonCount + lowStock.length + outOfStockCount;
+
+          return NotificationPanel(
+            totalCount: totalCount,
+            expiredCount: expiredCount,
+            expiringSoonCount: expiringSoonCount,
+            outOfStockCount: outOfStockCount,
+            lowStockMedicines: lowStock,
+            outOfStockMedicines: outOfStock,
+            expiringSoonMedicines: expiringSoon,
+            onGoToCabinet: onGoToCabinet,
+            onDismiss: onDismiss,
+            onClearAll: onClearAll,
+          );
+        },
       ),
     );
   }
@@ -131,6 +166,7 @@ class NotificationPanel extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
                       ..._buildExpiredSection(context),
+                      ..._buildOutOfStockSection(context),
                       ..._buildLowStockSection(context),
                     ],
                   ),
@@ -211,6 +247,31 @@ class NotificationPanel extends StatelessWidget {
             onDismiss: () => onDismiss(med, 'soon'),
           ),
         ),
+    ];
+  }
+
+  List<Widget> _buildOutOfStockSection(BuildContext context) {
+    if (outOfStockMedicines.isEmpty) return [];
+
+    return [
+      _buildSectionHeader(
+        'Stock Finished',
+        Icons.block_rounded,
+        Colors.redAccent,
+      ),
+      ...outOfStockMedicines.map(
+        (med) => _buildNotificationItem(
+          icon: Icons.medication_rounded,
+          iconColor: Colors.redAccent,
+          title: med.medicineName,
+          subtitle: 'Stock depleted. Time to refill!',
+          onTap: () {
+            onDismiss(med, 'stock');
+            onGoToCabinet();
+          },
+          onDismiss: () => onDismiss(med, 'stock'),
+        ),
+      ),
     ];
   }
 
