@@ -151,6 +151,41 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     setState(() => _isLoading = true);
 
     try {
+      final email = _emailController.text.trim().toLowerCase();
+
+      final user = _firebaseService.currentUser;
+
+      // ONLY check Firestore if we are ALREADY authenticated (like Google Users)
+      // For new Email/Password users, user is NULL and we lack permission to query.
+      // But that's okay, because Firebase Auth will catch duplicates anyway!
+      if (user != null) {
+        // Find if this email exists under ANY UID in our users collection
+        final querySnapshot = await _firebaseService.usersCollection
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          final existingDoc = querySnapshot.docs.first;
+          // If the UID is DIFFERENT than our current authenticated UID, block it
+          if (existingDoc.id != user.uid) {
+            _showSnackBar(
+              'This email already has an account. Please Log In with your password to link them.',
+              isError: true,
+            );
+            
+            // Clean up the "phantom" auth user if they are using Google
+            if (_isGoogleUser) await _firebaseService.signOut();
+            
+            if (mounted) {
+              setState(() => _isLoading = false);
+              Navigator.pushReplacementNamed(context, '/login');
+            }
+            return;
+          }
+        }
+      }
+
       if (_firebaseService.currentUser == null) {
         final credential = await _firebaseService.signUpWithEmailAndPassword(
           email: _emailController.text.trim(),

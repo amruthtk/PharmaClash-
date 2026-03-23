@@ -1179,7 +1179,7 @@ class _ResultsOverlayState extends State<ResultsOverlay>
           ),
           child: const Center(
             child: Text(
-              '🚨 CONTACT DOCTOR NOW',
+              '🚨 CONTACT CAREGIVER NOW',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,

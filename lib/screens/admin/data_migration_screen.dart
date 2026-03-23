@@ -207,7 +207,13 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
       // Augmentin
       DrugModel(
         displayName: 'Amoxicillin + Clavulanic Acid',
-        brandNames: ['Augmentin', 'Moxikind-CV', 'Clavam'],
+        brandNames: [
+          'Augmentin',
+          'Moxikind-CV',
+          'Clavam',
+          'AMPOXIN-CV 625',
+          'AMPOXIN-CV'
+        ],
         category: 'Antibiotic (Penicillin)',
         isCombination: true,
         physicalForm: 'Tablet',
@@ -297,7 +303,13 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
       // Moxikind-CV Duo
       DrugModel(
         displayName: 'Amoxicillin + Potassium Clavulanate',
-        brandNames: ['Moxikind-CV', 'Augmentin 625', 'Clavam 625'],
+        brandNames: [
+          'Moxikind-CV',
+          'Augmentin 625',
+          'Clavam 625',
+          'AMPOXIN-CV 625',
+          'AMPOXIN-CV'
+        ],
         category: 'Antibiotic',
         isCombination: true,
         physicalForm: 'Tablet',
@@ -1380,7 +1392,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
       {
         "id": "amoxicillin",
         "name": "Amoxicillin",
-        "brands": ["Mox", "Novamox"],
+        "brands": ["Mox", "Novamox", "Amoxycillin"],
         "salt": "Penicillin",
         "allergy_group": "Penicillins",
         "food_clashes": [],

@@ -32,7 +32,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   List<DrugModel> _drugs = [];
   int _drugCount = 0;
   int _categoryCount = 0;
-  int _userCount = 0;
   int _ruleCount = 0;
   Map<String, int> _riskDistribution = {'severe': 0, 'moderate': 0, 'mild': 0};
 
@@ -73,7 +72,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       // Core data — these are critical
       final drugs = await _drugService.getAllDrugs(forceRefresh: true);
       final categories = await _drugService.getCategories();
-      final userCount = await _analytics.getTotalUsers();
 
       List<Map<String, dynamic>> recentLogs = [];
       try { recentLogs = await _analytics.getRecentAdminLogs(limit: 5); } catch (e) { debugPrint('Dashboard: recentLogs error: $e'); }
@@ -96,7 +94,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           _drugs = drugs;
           _drugCount = drugs.length;
           _categoryCount = categories.length;
-          _userCount = userCount;
           _ruleCount = _analytics.getInteractionRuleCount(drugs);
           _riskDistribution = _analytics.getRiskDistribution(drugs);
           _recentLogs = recentLogs;
@@ -163,7 +160,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primaryTeal.withValues(alpha: 0.2),
+                color: AppColors.primaryTeal.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -281,7 +278,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryTeal.withValues(alpha: 0.3),
+            color: AppColors.primaryTeal.withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -306,7 +303,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   'Manage drugs, interaction rules, and monitor system analytics.',
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: Colors.white.withOpacity(0.8),
                   ),
                 ),
               ],
@@ -316,7 +313,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
@@ -332,16 +329,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Widget _buildStatsGrid() {
     return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio:
-          1.0, // More vertical space for stats cards to prevent overflow
+      crossAxisCount: 3,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 0.9,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
         AdminStatCard(
-          label: 'Total Drugs',
+          label: 'Drugs',
           value: '$_drugCount',
           icon: Icons.medication_rounded,
           color: AppColors.mintGreen,
@@ -353,17 +349,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           color: Colors.amber,
         ),
         AdminStatCard(
-          label: 'Users',
-          value: '$_userCount',
-          icon: Icons.people_rounded,
-          color: Colors.blue,
-        ),
-        AdminStatCard(
-          label: 'Interaction Rules',
+          label: 'Rules',
           value: '$_ruleCount',
           icon: Icons.compare_arrows_rounded,
           color: Colors.red.shade400,
-          subtitle: '${_riskDistribution['severe'] ?? 0} severe',
         ),
       ],
     );
@@ -509,9 +498,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          border: Border.all(color: color.withOpacity(0.3)),
         ),
         child: Column(
           children: [
@@ -656,7 +645,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     final count = check['count'] as int;
                     final severity = check['severity'] as String? ?? 'safe';
                     final maxCount = _topGuestChecks.first['count'] as int;
-                    final barColor = _getSeverityColor(severity);
+                    
+                    Color barColor = AppColors.primaryTeal;
+                    switch (severity.toLowerCase()) {
+                      case 'severe': barColor = Colors.red.shade400; break;
+                      case 'moderate': barColor = Colors.orange.shade400; break;
+                      case 'mild': barColor = Colors.blue.shade400; break;
+                    }
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -675,7 +670,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
                               value: count / maxCount,
-                              backgroundColor: Colors.white.withValues(alpha: 0.1),
+                              backgroundColor: Colors.white.withOpacity(0.1),
                               color: barColor,
                               minHeight: 6,
                             ),
@@ -724,18 +719,5 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
       ],
     );
-  }
-
-  Color _getSeverityColor(String severity) {
-    switch (severity.toLowerCase()) {
-      case 'severe':
-        return Colors.red.shade400;
-      case 'moderate':
-        return Colors.orange.shade400;
-      case 'mild':
-        return Colors.blue.shade400;
-      default:
-        return AppColors.primaryTeal;
-    }
   }
 }

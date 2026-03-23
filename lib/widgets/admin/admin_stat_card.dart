@@ -21,7 +21,7 @@ class AdminStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
@@ -31,18 +31,18 @@ class AdminStatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
+              color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(height: 12),
           Text(
             value,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: AppColors.lightText,
             ),
@@ -50,17 +50,21 @@ class AdminStatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+            style: TextStyle(fontSize: 11, color: AppColors.mutedText),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               subtitle!,
               style: TextStyle(
-                fontSize: 10,
-                color: color.withValues(alpha: 0.8),
+                fontSize: 9,
+                color: color.withOpacity(0.8),
                 fontWeight: FontWeight.w500,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ],

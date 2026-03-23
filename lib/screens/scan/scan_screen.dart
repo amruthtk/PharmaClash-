@@ -510,33 +510,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
             isScanning: _scanState == ScanState.scanning,
           ),
 
-          // 2. Back Button (Top Left)
-          if (_scanState == ScanState.scanning)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 16,
-              left: 16,
-              child: GestureDetector(
-                onTap: () {
-                  if (Navigator.canPop(context)) {
-                    Navigator.pop(context);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-
-          // 3. Scan Controls (Overlaid on scanner only)
+          // 2. Scan Controls (Overlaid on scanner only)
           if (_scanState == ScanState.scanning)
             ScanBottomControls(
               isProcessing: _isProcessing,

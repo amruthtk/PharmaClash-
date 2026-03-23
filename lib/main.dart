@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'firebase_options.dart';
@@ -177,7 +178,7 @@ class AuthWrapper extends StatelessWidget {
 
           // Check if user has a profile in Firestore AND if biometrics are needed
           return FutureBuilder<Map<String, dynamic>>(
-            future: _getInitialData(user.uid),
+            future: _getInitialData(user),
             builder: (context, dataSnapshot) {
               if (dataSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
@@ -226,26 +227,59 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 
-  /// Get both profile and biometric status
-  Future<Map<String, dynamic>> _getInitialData(String uid) async {
-    final profile = await _getProfileFast(uid);
+  /// Get both profile and biometric status.
+  /// If no profile found for UID, try searching by email for unification.
+  Future<Map<String, dynamic>> _getInitialData(User user) async {
+    Map<String, dynamic>? profile = await _getProfileFast(user.uid);
+
+    // UNIFICATION LOGIC:
+    // If we have NO profile for this UID, but a profile exists with this EMAIL,
+    // we "adopt" that profile for this new sign-in method.
+    if (profile == null && user.email != null) {
+      profile = await _findExistingProfileByEmail(user.email!);
+      
+      // If found, "unify" it — save it back to Firestore under this UID
+      if (profile != null) {
+        await FirebaseService().saveUserProfile(
+          uid: user.uid,
+          email: profile['email'] ?? user.email!,
+          fullName: profile['fullName'] ?? user.displayName ?? '',
+          dateOfBirth: profile['dateOfBirth'] != null ? DateTime.parse(profile['dateOfBirth']) : null,
+          gender: profile['gender'],
+          isAdmin: profile['isAdmin'], // Preserve admin status
+        );
+        // Refresh local profile
+        profile = await FirebaseService().getUserProfile(user.uid);
+      }
+    }
+
     final isBioEnabled = await BiometricService().isBiometricEnabled();
     return {'profile': profile, 'isBioEnabled': isBioEnabled};
+  }
+
+  /// Search for any user document with a matching email
+  Future<Map<String, dynamic>?> _findExistingProfileByEmail(String email) async {
+    final query = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    
+    if (query.docs.isNotEmpty) {
+      return query.docs.first.data();
+    }
+    return null;
   }
 
   /// Try cache first for faster profile loading, fallback to server
   Future<Map<String, dynamic>?> _getProfileFast(String uid) async {
     try {
-      // Try cache first — instant for returning users
       final cachedDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get(const GetOptions(source: Source.cache));
       if (cachedDoc.exists) return cachedDoc.data();
-    } catch (_) {
-      // Cache miss — expected for first-time users
-    }
-    // Fallback to server
+    } catch (_) {}
     return FirebaseService().getUserProfile(uid);
   }
 }

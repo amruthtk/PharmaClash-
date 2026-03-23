@@ -83,16 +83,9 @@ class FirebaseService {
       // Sign in to Firebase with the Google credential
       final userCredential = await _auth.signInWithCredential(credential);
 
-      // Save user profile to Firestore if new user
-      if (userCredential.additionalUserInfo?.isNewUser ?? false) {
-        await Future.wait([
-          saveUserProfile(
-            uid: userCredential.user!.uid,
-            email: userCredential.user!.email ?? '',
-            fullName: userCredential.user!.displayName ?? '',
-          ),
-          updateDisplayName(userCredential.user!.displayName ?? ''),
-        ]);
+      // Update display name if it's a new or existing user but we have fresh data
+      if (userCredential.user?.displayName != null) {
+        await updateDisplayName(userCredential.user!.displayName!);
       }
 
       return userCredential;
@@ -177,6 +170,19 @@ class FirebaseService {
     }
 
     await usersCollection.doc(uid).set(data, SetOptions(merge: true));
+  }
+
+  /// Check if an email is already registered in the users collection
+  Future<bool> isEmailRegistered(String email) async {
+    try {
+      final query = await usersCollection
+          .where('email', isEqualTo: email.trim().toLowerCase())
+          .limit(1)
+          .get();
+      return query.docs.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
   }
 
   /// Check if user is admin

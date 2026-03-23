@@ -212,7 +212,16 @@ class DrugService {
         final brandLower = brand.toLowerCase();
         final brandClean = brandLower.replaceAll(RegExp(r'[-\s]'), '');
 
-        if (lowerText.contains(brandLower) || lowerText.contains(brandClean)) {
+        // Use word boundary check for short names to prevent false positives (like "Mox" matching "Amoxycillin")
+        if (brandLower.length < 5) {
+          final regex = RegExp('\\b${RegExp.escape(brandLower)}\\b');
+          if (regex.hasMatch(lowerText)) {
+            matchedName = brand;
+            found = true;
+            break;
+          }
+        } else if (lowerText.contains(brandLower) ||
+            lowerText.contains(brandClean)) {
           matchedName = brand;
           found = true;
           break;
@@ -236,8 +245,13 @@ class DrugService {
       if (!found && drug.activeIngredients.isNotEmpty) {
         int ingredientMatches = 0;
         for (final ingredient in drug.activeIngredients) {
-          final ingredientLower = ingredient.name.toLowerCase();
-          if (lowerText.contains(ingredientLower)) {
+          final ingredientName = ingredient.name.toLowerCase();
+          // Handle common amoxicillin/amoxycillin variation
+          if (lowerText.contains(ingredientName) ||
+              (ingredientName.contains('amoxicillin') &&
+                  lowerText.contains('amoxycillin')) ||
+              (ingredientName.contains('amoxycillin') &&
+                  lowerText.contains('amoxicillin'))) {
             ingredientMatches++;
           }
         }
@@ -254,7 +268,11 @@ class DrugService {
         final parts = displayLower.split('+').map((p) => p.trim()).toList();
         int matchedParts = 0;
         for (final part in parts) {
-          if (lowerText.contains(part)) {
+          if (lowerText.contains(part) ||
+              (part.contains('amoxicillin') &&
+                  lowerText.contains('amoxycillin')) ||
+              (part.contains('amoxycillin') &&
+                  lowerText.contains('amoxicillin'))) {
             matchedParts++;
           }
         }
@@ -285,7 +303,11 @@ class DrugService {
       bool found = false;
 
       // Check generic name — require full generic name match in text
-      if (lowerText.contains(genericLower)) {
+      if (lowerText.contains(genericLower) ||
+          (genericLower.contains('amoxicillin') &&
+              lowerText.contains('amoxycillin')) ||
+          (genericLower.contains('amoxycillin') &&
+              lowerText.contains('amoxicillin'))) {
         found = true;
       }
 
@@ -305,12 +327,20 @@ class DrugService {
       if (!found) {
         for (final brand in drug.brandNames) {
           final brandLower = brand.toLowerCase();
-          // Full brand name found as substring in OCR text
-          if (lowerText.contains(brandLower)) {
+          // Use word boundary check for short names (prevents "mox" in "amoxycillin" from matching)
+          if (brandLower.length < 5) {
+            final regex = RegExp('\\b${RegExp.escape(brandLower)}\\b');
+            if (regex.hasMatch(lowerText)) {
+              matchedName = brand;
+              found = true;
+              break;
+            }
+          } else if (lowerText.contains(brandLower)) {
             matchedName = brand;
             found = true;
             break;
           }
+
           // Strict prefix match on non-noise words (80% coverage, min 6 chars)
           for (final word in enhancedWords) {
             if (word.length >= 6) {

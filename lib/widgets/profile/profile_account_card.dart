@@ -6,7 +6,6 @@ class ProfileAccountCard extends StatelessWidget {
   final bool canUseBiometrics;
   final bool biometricEnabled;
   final ValueChanged<bool> onBiometricChanged;
-  final VoidCallback onRefresh;
   final VoidCallback onSignOut;
 
   const ProfileAccountCard({
@@ -14,7 +13,6 @@ class ProfileAccountCard extends StatelessWidget {
     required this.canUseBiometrics,
     required this.biometricEnabled,
     required this.onBiometricChanged,
-    required this.onRefresh,
     required this.onSignOut,
   });
 
@@ -36,13 +34,6 @@ class ProfileAccountCard extends StatelessWidget {
       child: Column(
         children: [
           if (canUseBiometrics) ...[_buildBiometricTile(), _buildDivider()],
-          ProfileActionTile(
-            icon: Icons.refresh_rounded,
-            title: 'Refresh Profile',
-            subtitle: 'Reload your profile data',
-            onTap: onRefresh,
-          ),
-          _buildDivider(),
           ProfileActionTile(
             icon: Icons.logout_rounded,
             title: 'Sign Out',

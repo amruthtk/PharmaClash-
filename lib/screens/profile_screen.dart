@@ -385,7 +385,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       await _disableBiometric();
                     }
                   },
-                  onRefresh: _loadUserData,
                   onSignOut: () async {
                     await _firebaseService.signOut();
                     if (mounted) {

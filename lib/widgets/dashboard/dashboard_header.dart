@@ -8,7 +8,7 @@ class DashboardHeader extends StatelessWidget {
   final bool hasNotifications;
   final VoidCallback onNotificationTap;
   final VoidCallback onProfileTap;
-  final VoidCallback? onDebugTap;
+  final VoidCallback? onBackTap;
 
   const DashboardHeader({
     super.key,
@@ -17,7 +17,7 @@ class DashboardHeader extends StatelessWidget {
     required this.hasNotifications,
     required this.onNotificationTap,
     required this.onProfileTap,
-    this.onDebugTap,
+    this.onBackTap,
   });
 
   @override
@@ -26,27 +26,27 @@ class DashboardHeader extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.white.withOpacity(0.85),
-                Colors.white.withOpacity(0.6),
+                Colors.white.withValues(alpha: 0.95),
+                Colors.white.withValues(alpha: 0.8),
               ],
             ),
             border: Border(
               bottom: BorderSide(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha: 0.6),
                 width: 1,
               ),
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryTeal.withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
+                color: AppColors.primaryTeal.withValues(alpha: 0.1),
+                blurRadius: 25,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -56,36 +56,53 @@ class DashboardHeader extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // User greeting
+                  // Back button + User greeting/Title
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          'Hello, $userName! 👋',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.grayText.withOpacity(0.85),
-                            fontWeight: FontWeight.w500,
+                        if (onBackTap != null) ...[
+                          _buildGlassButton(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            onTap: onBackTap!,
+                            isSmall: true,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [
-                              Color(0xFF0D9488),
-                              Color(0xFF14B8A6),
-                              Color(0xFF2DD4BF),
+                          const SizedBox(width: 16),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hello, $userName! 👋',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.grayText.withValues(
+                                    alpha: 0.8,
+                                  ),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              ShaderMask(
+                                shaderCallback:
+                                    (bounds) => const LinearGradient(
+                                      colors: [
+                                        Color(0xFF0F766E),
+                                        Color(0xFF0D9488),
+                                        Color(0xFF14B8A6),
+                                      ],
+                                    ).createShader(bounds),
+                                child: Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.6,
+                                  ),
+                                ),
+                              ),
                             ],
-                          ).createShader(bounds),
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: -0.5,
-                            ),
                           ),
                         ),
                       ],
@@ -95,13 +112,6 @@ class DashboardHeader extends StatelessWidget {
                   // Action buttons
                   Row(
                     children: [
-                      if (onDebugTap != null) ...[
-                        _buildGlassButton(
-                          icon: Icons.bug_report_outlined,
-                          onTap: onDebugTap!,
-                        ),
-                        const SizedBox(width: 10),
-                      ],
                       _buildGlassButton(
                         icon: Icons.notifications_outlined,
                         hasNotification: hasNotifications,
@@ -127,28 +137,29 @@ class DashboardHeader extends StatelessWidget {
     required IconData icon,
     required VoidCallback onTap,
     bool hasNotification = false,
+    bool isSmall = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(isSmall ? 10 : 14),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            width: 44,
-            height: 44,
+            width: isSmall ? 38 : 44,
+            height: isSmall ? 38 : 44,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.white.withOpacity(0.7),
-                  Colors.white.withOpacity(0.4),
+                  Colors.white.withValues(alpha: 0.7),
+                  Colors.white.withValues(alpha: 0.4),
                 ],
               ),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(isSmall ? 10 : 14),
               border: Border.all(
-                color: Colors.white.withOpacity(0.6),
+                color: Colors.white.withValues(alpha: 0.6),
                 width: 1,
               ),
               boxShadow: [

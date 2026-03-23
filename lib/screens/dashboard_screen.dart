@@ -14,6 +14,7 @@ import '../widgets/expiry_banner.dart';
 import '../widgets/new_strip_form.dart';
 import '../widgets/missed_dose_reminder_sheet.dart';
 import 'profile_screen.dart';
+import 'guest_feature_screen.dart';
 import 'scan/scan_screen.dart';
 import 'medicine_cabinet_screen.dart';
 import 'history_screen.dart';
@@ -595,17 +596,12 @@ class _DashboardScreenState extends State<DashboardScreen>
       title: title,
       hasNotifications: _totalNotificationCount > 0,
       onNotificationTap: _showNotificationPanel,
-      onDebugTap: kDebugMode ? () async {
-        final user = _firebaseService.currentUser;
-        if (user != null) {
-          final medicines = await _inventoryService.getUserMedicines(user.uid);
-          await NotificationService().showImmediateDailyHealthCheck(medicines);
-        }
-      } : null,
       onProfileTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const ProfileScreen()),
       ),
+      onBackTap:
+          _currentIndex == 0 ? () => setState(() => _currentIndex = 1) : null,
     );
   }
 
@@ -1302,7 +1298,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ScanScreen()),
+              MaterialPageRoute(
+                builder: (context) => const GuestFeatureScreen(
+                  title: 'Quick Scan',
+                  icon: Icons.document_scanner_rounded,
+                  isGuest: false,
+                  child: ScanScreen(isGuestMode: false),
+                ),
+              ),
             );
           },
           borderRadius: BorderRadius.circular(34),
